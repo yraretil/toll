@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.local
+# Internal planning / working notes — never publish.
+PLAN.md
+docs/notes.md
