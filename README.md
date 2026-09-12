@@ -1,15 +1,24 @@
-# Toll
+<h1 align="center">Toll</h1>
 
-**An AI agent that autonomously buys live on-chain data.** An LLM planner decides
-which data it needs, an [x402](https://www.x402.org/) payment handshake moves HBAR
+<p align="center">
+An AI agent that buys its own data.
+</p>
+
+<p align="center">
+No API keys. No subscriptions. No human clicking approve on a 2-cent purchase.
+The agent sees a price, checks its own spending policy, pays, and moves on.
+</p>
+
+Ask it which stablecoin lends best on Aave V3 and it goes shopping: an LLM planner
+figures out what it needs, an [x402](https://www.x402.org/) handshake moves HBAR
 per query on Hedera testnet, [The Graph](https://thegraph.com/) supplies live Aave V3
-knowledge, and an [ENSv2](https://docs.ens.domains/ensv2/overview) policy defines what
-the agent is allowed to buy.
+knowledge, and an [ENSv2](https://docs.ens.domains/ensv2/overview) policy decides
+what the agent is even allowed to buy.
 
 > What happens when HTTP resources become directly purchasable by autonomous agents?
-> x402 gives HTTP a native payment handshake — an agent asks for data, the server
-> quotes a price, the agent pays and the answer comes back. No API key, no account,
-> no checkout.
+> x402 gives HTTP a native payment handshake — the agent asks for data, the server
+> quotes a price, the agent pays and the answer comes back. No account, no checkout,
+> no key to beg you for.
 
 ## Architecture
 
