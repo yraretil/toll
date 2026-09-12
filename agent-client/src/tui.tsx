@@ -11,6 +11,7 @@ import {
   hashscanUrl,
   loadIdentity,
   tinybarToHbar,
+  fmtCompact,
   type AgentIdentity,
 } from "./identity.js";
 import { DEFAULT_TASK, TOOLS } from "./catalog.js";
@@ -19,6 +20,50 @@ import { policyClients, setPolicyRecord } from "../scripts/policy.js";
 const TIGHT_CAP = "100000";
 const OPEN_CAP = "2000000";
 const MAX_LINES = 24;
+
+interface MarketLike {
+  symbol?: unknown;
+  supplyApyPct?: unknown;
+  variableBorrowApyPct?: unknown;
+  totalLiquidity?: unknown;
+  utilizationPct?: unknown;
+}
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** One-line "what we learned" digest per purchase (safe against shape drift). */
+function digest(tool: string, body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const b = body as Record<string, unknown>;
+  if (tool === "snapshot" && Array.isArray(b.markets)) {
+    const top = (b.markets as MarketLike[]).slice(0, 3).map((m) => {
+      const apy = num(m.supplyApyPct);
+      return `${String(m.symbol)} ${apy === null ? "?" : `${apy.toFixed(2)}%`}`;
+    });
+    return `learned — top: ${top.join(" · ")}`;
+  }
+  if (tool === "deep-dive" && typeof b.market === "object" && b.market !== null) {
+    const m = b.market as MarketLike;
+    const apy = num(m.supplyApyPct);
+    const borrow = num(m.variableBorrowApyPct);
+    const util = num(m.utilizationPct);
+    const liq = num(m.totalLiquidity);
+    return (
+      `learned — ${String(m.symbol)} supply ${apy === null ? "?" : `${apy.toFixed(2)}%}`}` +
+      ` · borrow ${borrow === null ? "?" : `${borrow.toFixed(2)}%}`} · util ` +
+      `${util === null ? "?" : `${util.toFixed(1)}%}`} · liq ${liq === null ? "?" : fmtCompact(liq)}`
+    );
+  }
+  if (tool === "history" && Array.isArray(b.history) && b.history.length > 0) {
+    const last = b.history[b.history.length - 1] as MarketLike & { supplyApyPct?: unknown; utilizationPct?: unknown };
+    const apy = num((last as { supplyApyPct?: unknown }).supplyApyPct);
+    const util = num((last as { utilizationPct?: unknown }).utilizationPct);
+    return `learned — ${String(b.symbol)} ${(b.history as unknown[]).length} pts · latest ${apy === null ? "?" : `${apy.toFixed(2)}%`} · util ${util === null ? "?" : `${util.toFixed(1)}%`}`;
+  }
+  return null;
+}
 
 function shortAddr(addr: string): string {
   return addr.length > 14 ? `${addr.slice(0, 8)}…${addr.slice(-6)}` : addr;
@@ -101,6 +146,8 @@ function App(): React.JSX.Element {
               push(`▸ planner wants ${e.decision.action}${sym} — ${e.decision.reason}`);
             } else if (e.type === "purchase") {
               push(`  ✓ bought ${e.purchase.tool} · ${e.purchase.amountTinybar} tinybar (spent ${e.spentTinybar})`);
+              const d = digest(e.purchase.tool, e.purchase.body);
+              if (d) push(`    ${d}`);
             } else if (e.type === "stopped") {
               push(`  ✕ ${e.reason}`);
             }

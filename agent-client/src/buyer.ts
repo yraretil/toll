@@ -33,6 +33,19 @@ export function createBuyer(opts: {
   return async (tool: string, path: string) => {
     const res = await fetchWithPayment(`${opts.serverUrl}${path}`, { method: "GET" });
     const body = (await res.json()) as unknown;
+    if (!res.ok) {
+      // Pre-payment rejection (e.g. ENS policy): the middleware skips
+      // settlement on handler failure, so no spend occurred — surface it.
+      const reason =
+        typeof body === "object" && body !== null
+          ? String(
+              (body as { reason?: unknown }).reason ??
+                (body as { error?: unknown }).error ??
+                `HTTP ${res.status}`,
+            )
+          : `HTTP ${res.status}`;
+      throw new Error(reason);
+    }
     const paymentResponse = res.headers.get("PAYMENT-RESPONSE");
     const settlement = (
       paymentResponse ? decodePaymentResponseHeader(paymentResponse) : null

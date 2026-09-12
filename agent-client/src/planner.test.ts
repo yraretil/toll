@@ -195,4 +195,25 @@ describe("runPlannerLoop", () => {
     });
     expect(events).toEqual(["decision:snapshot", "purchase", "decision:recommend", "answer"]);
   });
+
+  it("stops with zero spend when the purchase is rejected pre-payment", async () => {
+    const failing: PurchaseFn = async () => {
+      throw new Error("Budget policy exceeded. Requested 200000, allowed 100000. STOPPING.");
+    };
+    const events: string[] = [];
+    const result = await runPlannerLoop({
+      task: "task",
+      budgetTinybar: 2_000_000,
+      tools: TOOLS,
+      llmCall: llmReturning(['{"action":"snapshot","reason":"try"}']),
+      purchase: failing,
+      onEvent: (e) => {
+        events.push(e.type);
+      },
+    });
+    expect(result.totalSpentTinybar).toBe(0);
+    expect(result.purchases).toEqual([]);
+    expect(result.stopped).toMatch(/Budget policy exceeded/);
+    expect(events).toEqual(["decision", "stopped"]);
+  });
 });

@@ -178,7 +178,15 @@ export async function runPlannerLoop(opts: {
       opts.onEvent?.({ type: "stopped", reason });
       return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
     }
-    const { body } = await opts.purchase(decision.action, pathFor(spec, decision.symbol));
+    let body: unknown;
+    try {
+      ({ body } = await opts.purchase(decision.action, pathFor(spec, decision.symbol)));
+    } catch (err) {
+      // Rejected pre-payment (no settlement, no spend): stop with the reason.
+      const reason = `stopped: purchase failed (${String(err)})`;
+      opts.onEvent?.({ type: "stopped", reason });
+      return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
+    }
     spent += spec.priceTinybar;
     purchases.push({
       tool: decision.action,

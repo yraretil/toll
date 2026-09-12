@@ -67,3 +67,12 @@ export function hashscanUrl(transaction: string): string {
 export function tinybarToHbar(tinybar: number): string {
   return (tinybar / 100_000_000).toFixed(6);
 }
+
+/** Compact human number: 1979949054 → "1.98B", 169400653 → "169.40M". */
+export function fmtCompact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return String(Math.round(n * 100) / 100);
+}

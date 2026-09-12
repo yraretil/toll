@@ -44,7 +44,7 @@ export async function policyClients(): Promise<PolicyClients> {
   return { agentName, node, resolver, publicClient, wallet };
 }
 
-/** Set one policy text record; resolves to the tx hash. */
+/** Set one policy text record; resolves to the tx hash (throws if reverted). */
 export async function setPolicyRecord(
   clients: PolicyClients,
   key: string,
@@ -56,6 +56,20 @@ export async function setPolicyRecord(
     functionName: "setText",
     args: [clients.node, key, value],
   });
-  await clients.publicClient.waitForTransactionReceipt({ hash });
+  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status === "reverted") {
+    throw new Error(`policy write reverted: ${key}=${value} (${hash})`);
+  }
   return hash;
+}
+
+/** Read one policy text record back (verify-after-write). */
+export async function getPolicyRecord(clients: PolicyClients, key: string): Promise<string> {
+  const value = await clients.publicClient.readContract({
+    address: clients.resolver,
+    abi: resolverAbi,
+    functionName: "text",
+    args: [clients.node, key],
+  });
+  return value as string;
 }

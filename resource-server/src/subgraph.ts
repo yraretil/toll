@@ -40,7 +40,9 @@ export interface MarketSnapshot {
   symbol: string;
   name: string;
   supplyApyPct: number;
+  variableBorrowApyPct: number;
   totalLiquidity: number;
+  availableLiquidity: number;
   utilizationPct: number;
 }
 
@@ -49,7 +51,9 @@ interface ReserveRow {
   name: string;
   decimals: number;
   liquidityRate: string;
+  variableBorrowRate: string;
   totalLiquidity: string;
+  availableLiquidity: string;
   utilizationRate: string;
 }
 
@@ -57,14 +61,17 @@ interface ReserveRow {
 export async function queryMarkets(topN: number): Promise<MarketSnapshot[]> {
   const data = await graphQuery<{ reserves: ReserveRow[] }>(`{
     reserves(first: ${topN}, orderBy: totalLiquidity, orderDirection: desc, where: {isActive: true}) {
-      symbol name decimals liquidityRate totalLiquidity utilizationRate
+      symbol name decimals liquidityRate variableBorrowRate
+      totalLiquidity availableLiquidity utilizationRate
     }
   }`);
   return data.reserves.map((r) => ({
     symbol: r.symbol,
     name: r.name,
     supplyApyPct: rayToPct(r.liquidityRate),
+    variableBorrowApyPct: rayToPct(r.variableBorrowRate),
     totalLiquidity: scaledAmount(r.totalLiquidity, r.decimals),
+    availableLiquidity: scaledAmount(r.availableLiquidity, r.decimals),
     utilizationPct: Number(r.utilizationRate) * 100,
   }));
 }
@@ -72,30 +79,41 @@ export async function queryMarkets(topN: number): Promise<MarketSnapshot[]> {
 export interface HistoryPoint {
   timestamp: number;
   supplyApyPct: number;
+  variableBorrowApyPct: number;
   utilizationPct: number;
 }
 
 /** APY + utilization history for one reserve (history tool). */
 export async function queryHistory(symbol: string, points = 25): Promise<HistoryPoint[]> {
   const data = await graphQuery<{
-    reserveParamsHistoryItems: { liquidityRate: string; utilizationRate: string; timestamp: number }[];
+    reserveParamsHistoryItems: {
+      liquidityRate: string;
+      variableBorrowRate: string;
+      utilizationRate: string;
+      timestamp: number;
+    }[];
   }>(`{
     reserveParamsHistoryItems(first: ${points}, orderBy: timestamp, orderDirection: desc, where: {reserve_: {symbol: "${symbol}"}}) {
-      liquidityRate utilizationRate timestamp
+      liquidityRate variableBorrowRate utilizationRate timestamp
     }
   }`);
   return data.reserveParamsHistoryItems.map((h) => ({
     timestamp: h.timestamp,
     supplyApyPct: rayToPct(h.liquidityRate),
+    variableBorrowApyPct: rayToPct(h.variableBorrowRate),
     utilizationPct: Number(h.utilizationRate) * 100,
   }));
 }
 
 export interface MarketDetail extends MarketSnapshot {
   underlyingAsset: string;
-  availableLiquidity: number;
-  variableBorrowApyPct: number;
   stableBorrowApyPct: number;
+  /** Raw on-chain risk parameters (units vary — displayed as-is). */
+  borrowCap: string;
+  supplyCap: string;
+  reserveFactor: string;
+  liquidationThreshold: string;
+  liquidationBonus: string;
   isActive: boolean;
   isFrozen: boolean;
 }
@@ -105,9 +123,12 @@ export async function queryMarketDetail(symbol: string): Promise<MarketDetail> {
   const data = await graphQuery<{
     reserves: (ReserveRow & {
       underlyingAsset: string;
-      availableLiquidity: string;
-      variableBorrowRate: string;
       stableBorrowRate: string;
+      borrowCap: string;
+      supplyCap: string;
+      reserveFactor: string;
+      reserveLiquidationThreshold: string;
+      reserveLiquidationBonus: string;
       isActive: boolean;
       isFrozen: boolean;
     })[];
@@ -115,6 +136,8 @@ export async function queryMarketDetail(symbol: string): Promise<MarketDetail> {
     reserves(where: {symbol: "${symbol}"}) {
       symbol name decimals underlyingAsset liquidityRate utilizationRate
       totalLiquidity availableLiquidity variableBorrowRate stableBorrowRate
+      borrowCap supplyCap reserveFactor
+      reserveLiquidationThreshold reserveLiquidationBonus
       isActive isFrozen
     }
   }`);
@@ -124,12 +147,17 @@ export async function queryMarketDetail(symbol: string): Promise<MarketDetail> {
     symbol: r.symbol,
     name: r.name,
     supplyApyPct: rayToPct(r.liquidityRate),
+    variableBorrowApyPct: rayToPct(r.variableBorrowRate),
     totalLiquidity: scaledAmount(r.totalLiquidity, r.decimals),
+    availableLiquidity: scaledAmount(r.availableLiquidity, r.decimals),
     utilizationPct: Number(r.utilizationRate) * 100,
     underlyingAsset: r.underlyingAsset,
-    availableLiquidity: scaledAmount(r.availableLiquidity, r.decimals),
-    variableBorrowApyPct: rayToPct(r.variableBorrowRate),
     stableBorrowApyPct: rayToPct(r.stableBorrowRate),
+    borrowCap: r.borrowCap,
+    supplyCap: r.supplyCap,
+    reserveFactor: r.reserveFactor,
+    liquidationThreshold: r.reserveLiquidationThreshold,
+    liquidationBonus: r.reserveLiquidationBonus,
     isActive: r.isActive,
     isFrozen: r.isFrozen,
   };
