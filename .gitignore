@@ -4,4 +4,4 @@ dist/
 *.local
 # Internal planning / working notes — never publish.
 PLAN.md
-docs/notes.md
+docs/

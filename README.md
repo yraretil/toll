@@ -106,4 +106,4 @@ Full check: `bash scripts/e2e.sh` from the repo root.
   See `resource-server/src/subgraph.ts` and the planner loop in `agent-client/src/planner.ts`.
 - **ENS — Best Use of ENSv2.** The name's records ARE the spending policy, enforced at
   payment time — identity → policy → autonomy. See `resource-server/src/ens-policy.ts`,
-  `agent-client/scripts/register-ens.ts`, and the demo beat in `docs/DEMO.md`.
+  `agent-client/scripts/register-ens.ts` (`update-policy.ts` drives the demo beat).
