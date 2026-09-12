@@ -1,0 +1,202 @@
+// Toll TUI: the demo surface. Same real planner loop + real x402 purchases
+// as index.ts, rendered as a live story (Ink). Nothing here is replayed.
+import "dotenv/config";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Text, render, useApp, useInput } from "ink";
+import TextInput from "ink-text-input";
+import Spinner from "ink-spinner";
+import { makeLlmCall, runPlannerLoop, type PlannerResult } from "./planner.js";
+import { createBuyer, type Settlement } from "./buyer.js";
+import {
+  hashscanUrl,
+  loadIdentity,
+  tinybarToHbar,
+  type AgentIdentity,
+} from "./identity.js";
+import { DEFAULT_TASK, TOOLS } from "./catalog.js";
+import { policyClients, setPolicyRecord } from "../scripts/policy.js";
+
+const TIGHT_CAP = "100000";
+const OPEN_CAP = "2000000";
+const MAX_LINES = 24;
+
+function shortAddr(addr: string): string {
+  return addr.length > 14 ? `${addr.slice(0, 8)}…${addr.slice(-6)}` : addr;
+}
+
+type Phase = "boot" | "idle" | "running" | "done";
+
+function App(): React.JSX.Element {
+  const { exit } = useApp();
+  const [phase, setPhase] = useState<Phase>("boot");
+  const [identity, setIdentity] = useState<AgentIdentity | null>(null);
+  const [taskDraft, setTaskDraft] = useState(DEFAULT_TASK);
+  const [lines, setLines] = useState<string[]>([]);
+  const [result, setResult] = useState<PlannerResult | null>(null);
+  const [tight, setTight] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const runningRef = useRef(false);
+
+  const push = useCallback((line: string) => {
+    setLines((prev) => [...prev.slice(-MAX_LINES + 1), line]);
+  }, []);
+
+  const refreshIdentity = useCallback(async () => {
+    try {
+      setIdentity(await loadIdentity());
+    } catch (err) {
+      push(`identity load failed: ${String(err)}`);
+    }
+  }, [push]);
+
+  useEffect(() => {
+    void (async () => {
+      await refreshIdentity();
+      setPhase("idle");
+    })();
+  }, [refreshIdentity]);
+
+  const run = useCallback(
+    async (task: string) => {
+      if (runningRef.current) return;
+      runningRef.current = true;
+      setPhase("running");
+      setResult(null);
+      setLines([]);
+      try {
+        const accountId = process.env.HEDERA_ACCOUNT_ID;
+        const privateKey = process.env.HEDERA_PRIVATE_KEY;
+        const serverUrl = process.env.RESOURCE_SERVER_URL ?? "http://localhost:4021";
+        if (!accountId || !privateKey) throw new Error("HEDERA keys missing in .env");
+        const llmKey = process.env.LLM_API_KEY ?? "";
+        if (!llmKey) throw new Error("LLM_API_KEY missing in .env");
+        const id = await loadIdentity();
+        setIdentity(id);
+        push(`task: ${task}`);
+        push(`budget: ${id.dailyCapTinybar} tinybar (spend.dailyCap on ${id.name})`);
+        const purchase = createBuyer({
+          serverUrl,
+          accountId,
+          privateKey,
+          onSettlement: (_tool, _path, s: Settlement | null) => {
+            push(s ? `  ↳ settled ${s.transaction}` : `  ↳ no settlement (rejected pre-payment)`);
+            if (s) push(`    ${hashscanUrl(s.transaction)}`);
+          },
+        });
+        const llmCall = makeLlmCall(
+          process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1",
+          llmKey,
+          process.env.LLM_MODEL ?? "openai/gpt-oss-120b",
+        );
+        const res = await runPlannerLoop({
+          task,
+          budgetTinybar: id.dailyCapTinybar,
+          tools: TOOLS,
+          llmCall,
+          purchase,
+          onEvent: (e) => {
+            if (e.type === "decision" && e.decision.action !== "recommend") {
+              const sym = e.decision.symbol ? ` ${e.decision.symbol}` : "";
+              push(`▸ planner wants ${e.decision.action}${sym} — ${e.decision.reason}`);
+            } else if (e.type === "purchase") {
+              push(`  ✓ bought ${e.purchase.tool} · ${e.purchase.amountTinybar} tinybar (spent ${e.spentTinybar})`);
+            } else if (e.type === "stopped") {
+              push(`  ✕ ${e.reason}`);
+            }
+          },
+        });
+        setResult(res);
+        push(`total spent: ${tinybarToHbar(res.totalSpentTinybar)} HBAR`);
+      } catch (err) {
+        push(`error: ${String(err)}`);
+      } finally {
+        runningRef.current = false;
+        setPhase("done");
+      }
+    },
+    [push],
+  );
+
+  const toggleCap = useCallback(async () => {
+    if (busy || runningRef.current) return;
+    setBusy(true);
+    try {
+      const clients = await policyClients();
+      const next = tight ? OPEN_CAP : TIGHT_CAP;
+      const hash = await setPolicyRecord(clients, "spend.maxPerRequest", next);
+      setTight(!tight);
+      push(tight ? `policy restored: maxPerRequest=${next} (${hash.slice(0, 10)}…)` : `policy tightened: maxPerRequest=${next} (${hash.slice(0, 10)}…) — rerun to watch it stop`);
+      await refreshIdentity();
+    } catch (err) {
+      push(`tighten failed (SEPOLIA key?): ${String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, tight, push, refreshIdentity]);
+
+  useInput((input, key) => {
+    if (input === "q") exit();
+    if (phase !== "running" && input === "r" && result) void run(taskDraft);
+    if (phase !== "running" && input === "t") void toggleCap();
+    if (key.return && phase === "idle") void run(taskDraft);
+  });
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+      <Text bold color="cyan">
+        Toll {identity ? `· ${identity.name}` : ""} {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
+      </Text>
+      {phase === "boot" || !identity ? (
+        <Text>
+          <Spinner type="dots" /> loading identity + policy from Sepolia…
+        </Text>
+      ) : (
+        <Box flexDirection="column">
+          <Text dimColor>
+            payer {identity.payerAccount} · {tinybarToHbar(identity.balanceTinybar)} HBAR ·{" "}
+            {shortAddr(identity.address)}
+          </Text>
+          <Text dimColor>
+            policy dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
+            {identity.maxPerRequestTinybar} · tools {identity.allowedTools} · {identity.riskTier}
+          </Text>
+        </Box>
+      )}
+      <Box marginTop={1} flexDirection="column">
+        <Text bold>task</Text>
+        {phase === "idle" && !result ? (
+          <TextInput value={taskDraft} onChange={setTaskDraft} onSubmit={(v) => void run(v)} />
+        ) : (
+          <Text>{taskDraft}</Text>
+        )}
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        {lines.map((l, i) => (
+          <Text key={i} wrap="truncate">
+            {l}
+          </Text>
+        ))}
+        {phase === "running" && (
+          <Text>
+            <Spinner type="dots" /> working…
+          </Text>
+        )}
+      </Box>
+      {result?.answer ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text bold>answer</Text>
+          <Text wrap="wrap">{result.answer}</Text>
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <Text dimColor>
+          [q]uit{result && phase !== "running" ? " · [r]erun" : ""}{" "}
+          {phase !== "running" ? "· [t]ighten/restore caps" : ""}
+          {result ? ` · total ${tinybarToHbar(result.totalSpentTinybar)} HBAR` : ""}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+render(<App />);

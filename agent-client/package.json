@@ -5,15 +5,21 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "tui": "tsx src/tui.tsx",
     "build": "tsc",
     "test": "vitest run",
     "register-ens": "tsx scripts/register-ens.ts"
   },
   "dependencies": {
+    "@types/react": "^19.3.0",
     "@x402/core": "2.25.0",
     "@x402/fetch": "2.25.0",
     "@x402/hedera": "2.25.0",
     "dotenv": "^16.4.5",
+    "ink": "^7.1.1",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.3.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {

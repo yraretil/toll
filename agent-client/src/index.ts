@@ -6,18 +6,12 @@ import {
   makeLlmCall,
   pathFor,
   runPlannerLoop,
-  type ToolSpec,
 } from "./planner.js";
 import { createBuyer, type Settlement } from "./buyer.js";
 import { hashscanUrl, loadIdentity, tinybarToHbar } from "./identity.js";
+import { LEGACY_TASK, TOOLS } from "./catalog.js";
 
-const TASK = "Find the best USDC lending opportunity on Aave V3.";
-
-const TOOLS: Record<string, ToolSpec> = {
-  snapshot: { path: "/data/snapshot", priceTinybar: 200_000 },
-  history: { path: "/data/history?symbol={symbol}", priceTinybar: 800_000, defaultSymbol: "USDC" },
-  "deep-dive": { path: "/data/deep-dive?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
-};
+const TASK = LEGACY_TASK;
 
 function log(...args: unknown[]): void {
   // eslint-disable-next-line no-console
