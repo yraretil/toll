@@ -4,7 +4,7 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import { priceForTool, type TollTool } from "./pricing.js";
-import { queryHistory, queryMarketDetail, queryMarkets, queryTokenPriceUsd } from "./subgraph.js";
+import { queryHistory, queryMarketDetail, queryMarkets, queryRiskScan, queryTokenPriceUsd } from "./subgraph.js";
 import { enforcePolicy, paymentHeaderFrom, spendStatus } from "./ens-policy.js";
 import type { PolicyDecision } from "./ens-policy.js";
 
@@ -103,6 +103,10 @@ app.use(
         accepts: acceptsFor("price"),
         description: "Live USD price via Uniswap V3 (paid via x402)",
       },
+      "GET /data/risk-scan": {
+        accepts: acceptsFor("risk-scan"),
+        description: "High-utilization / frozen / paused flags (paid via x402)",
+      },
     },
     resourceServer,
   ),
@@ -189,6 +193,21 @@ app.get("/data/price", async (req, res) => {
     res.json({
       paid: true,
       price,
+      identity: { name: decision.policy?.name, match: true },
+    });
+  } catch (err) {
+    res.status(502).json({ paid: true, error: String(err) });
+  }
+});
+
+app.get("/data/risk-scan", async (req, res) => {
+  const decision = await checkPolicy(req, res, "risk-scan");
+  if (!decision) return;
+  try {
+    const risks = await queryRiskScan();
+    res.json({
+      paid: true,
+      risks,
       identity: { name: decision.policy?.name, match: true },
     });
   } catch (err) {

@@ -49,6 +49,14 @@ describe("parseDecision", () => {
     });
   });
 
+  it("accepts the risk-scan action", () => {
+    expect(parseDecision('{"action":"risk-scan","reason":"check safety"}')).toEqual({
+      action: "risk-scan",
+      reason: "check safety",
+      symbol: undefined,
+    });
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parseDecision("not json")).toThrow(/not JSON/);
   });

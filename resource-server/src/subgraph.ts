@@ -62,6 +62,57 @@ export interface TokenPrice {
   ethPriceUsd: number;
 }
 
+export interface RiskFlag {
+  symbol: string;
+  name: string;
+  utilizationPct: number;
+  availableLiquidity: number;
+  isFrozen: boolean;
+  isPaused: boolean;
+  flags: string[];
+}
+
+/** Safety scan: high-utilization / frozen / paused markets (risk-scan tool). */
+export async function queryRiskScan(utilizationThresholdPct = 85): Promise<RiskFlag[]> {
+  const data = await graphQuery<{
+    reserves: {
+      symbol: string;
+      name: string;
+      decimals: number;
+      utilizationRate: string;
+      availableLiquidity: string;
+      isFrozen: boolean;
+      isPaused: boolean;
+    }[];
+  }>(`{
+    reserves(first: 15, orderBy: totalLiquidity, orderDirection: desc, where: {isActive: true}) {
+      symbol name decimals utilizationRate availableLiquidity isFrozen isPaused
+    }
+  }`);
+  const flagged: RiskFlag[] = [];
+  for (const r of data.reserves) {
+    const utilizationPct = Number(r.utilizationRate) * 100;
+    const flags: string[] = [];
+    if (utilizationPct > utilizationThresholdPct) {
+      flags.push(`utilization ${utilizationPct.toFixed(1)}% over ${utilizationThresholdPct}%`);
+    }
+    if (r.isFrozen) flags.push("frozen");
+    if (r.isPaused) flags.push("paused");
+    if (flags.length > 0) {
+      flagged.push({
+        symbol: r.symbol,
+        name: r.name,
+        utilizationPct,
+        availableLiquidity: scaledAmount(r.availableLiquidity, r.decimals),
+        isFrozen: r.isFrozen,
+        isPaused: r.isPaused,
+        flags,
+      });
+    }
+  }
+  return flagged;
+}
+
 /** Live USD price for a stablecoin via Uniswap V3 (price tool). */
 export async function queryTokenPriceUsd(symbol: string): Promise<TokenPrice> {
   const address = TOKEN_ADDRESSES[symbol.toUpperCase()];

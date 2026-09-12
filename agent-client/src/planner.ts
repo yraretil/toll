@@ -2,7 +2,7 @@
 // The LLM never signs and never touches money: it outputs strict JSON,
 // and a deterministic x402 purchase function executes approved buys.
 
-export type PlannerAction = "snapshot" | "history" | "deep-dive" | "price" | "recommend";
+export type PlannerAction = "snapshot" | "history" | "deep-dive" | "price" | "risk-scan" | "recommend";
 
 export interface PlannerDecision {
   action: PlannerAction;
@@ -15,7 +15,7 @@ export type MarketSymbol = "USDC" | "DAI" | "USDT";
 
 const SYMBOLS: MarketSymbol[] = ["USDC", "DAI", "USDT"];
 
-const ACTIONS: PlannerAction[] = ["snapshot", "history", "deep-dive", "price", "recommend"];
+const ACTIONS: PlannerAction[] = ["snapshot", "history", "deep-dive", "price", "risk-scan", "recommend"];
 
 export const MAX_PURCHASES = 4;
 const MAX_PARSE_RETRIES = 2;
@@ -104,7 +104,7 @@ function systemPrompt(
     `You have a budget of ${budgetTinybar} tinybar (1 HBAR = 100000000 tinybar).`,
     "Purchasable datasets:",
     catalog,
-    'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "price" | "recommend", "reason": "string", "symbol": "optional USDC|DAI|USDT for history/deep-dive/price"}.',
+    'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "price" | "risk-scan" | "recommend", "reason": "string", "symbol": "optional USDC|DAI|USDT for history/deep-dive/price"}.',
     'Choose "recommend" with your final grounded answer in `reason` when you have enough data.',
     'If the task needs no market data (a greeting, chit-chat, or anything off-topic), choose "recommend" immediately with a brief reply — never buy data you do not need.',
     'If the task asks only for a token price, buy "price" for that symbol directly — do not buy lending datasets first.',

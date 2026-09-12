@@ -64,6 +64,14 @@ function digest(tool: string, body: unknown): string | null {
     const usd = num(p.priceUsd);
     return `learned — ${String(p.symbol)} ≈ $${usd === null ? "?" : usd.toFixed(4)}`;
   }
+  if (tool === "risk-scan" && Array.isArray(b.risks)) {
+    const risks = b.risks as { symbol?: unknown; flags?: unknown }[];
+    if (risks.length === 0) return "learned — no flags: top markets look safe";
+    return `learned — ${risks.length} flagged: ${risks
+      .slice(0, 3)
+      .map((r) => `${String(r.symbol)} (${Array.isArray(r.flags) ? r.flags.join(", ") : "?"})`)
+      .join(" · ")}`;
+  }
   if (tool === "history" && Array.isArray(b.history) && b.history.length > 0) {
     const last = b.history[b.history.length - 1] as MarketLike & { supplyApyPct?: unknown; utilizationPct?: unknown };
     const apy = num((last as { supplyApyPct?: unknown }).supplyApyPct);
