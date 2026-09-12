@@ -4,7 +4,7 @@
 export const HBAR_ASSET = "0.0.0";
 export const TINYBAR_PER_HBAR = 100_000_000;
 
-export type TollTool = "snapshot" | "history" | "deep-dive" | "price" | "risk-scan";
+export type TollTool = "snapshot" | "history" | "deep-dive" | "price" | "risk-scan" | "whale-watch";
 
 export interface ToolPrice {
   tool: TollTool;
@@ -23,9 +23,11 @@ const SCHEDULE: Record<TollTool, number> = {
   price: 200_000,
   // risk-scan: high-utilization / frozen / paused flags — 0.002 HBAR
   "risk-scan": 200_000,
+  // whale-watch: top suppliers per market — 0.002 HBAR
+  "whale-watch": 200_000,
 };
 
-const TOOLS: TollTool[] = ["snapshot", "history", "deep-dive", "price", "risk-scan"];
+const TOOLS: TollTool[] = ["snapshot", "history", "deep-dive", "price", "risk-scan", "whale-watch"];
 
 export function isTollTool(tool: string): tool is TollTool {
   return (TOOLS as string[]).includes(tool);

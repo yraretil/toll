@@ -12,4 +12,5 @@ export const TOOLS: Record<string, ToolSpec> = {
   "deep-dive": { path: "/data/deep-dive?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
   price: { path: "/data/price?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
   "risk-scan": { path: "/data/risk-scan", priceTinybar: 200_000 },
+  "whale-watch": { path: "/data/whales?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
 };

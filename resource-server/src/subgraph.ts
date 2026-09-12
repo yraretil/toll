@@ -113,6 +113,33 @@ export async function queryRiskScan(utilizationThresholdPct = 85): Promise<RiskF
   return flagged;
 }
 
+export interface WhalePosition {
+  user: string;
+  symbol: string;
+  /** Scaled aToken balance ≈ underlying supplied (plus accrued interest). */
+  approxSupplied: number;
+}
+
+/** Top suppliers for a market by aToken balance (whale-watch tool). */
+export async function queryWhales(symbol: string, topN = 5): Promise<WhalePosition[]> {
+  const data = await graphQuery<{
+    userReserves: {
+      currentATokenBalance: string;
+      user: { id: string };
+      reserve: { symbol: string; decimals: number };
+    }[];
+  }>(`{
+    userReserves(first: ${topN}, orderBy: currentATokenBalance, orderDirection: desc, where: {reserve_: {symbol: "${symbol.toUpperCase()}"}}) {
+      currentATokenBalance user { id } reserve { symbol decimals }
+    }
+  }`);
+  return data.userReserves.map((u) => ({
+    user: u.user.id,
+    symbol: u.reserve.symbol,
+    approxSupplied: scaledAmount(u.currentATokenBalance, u.reserve.decimals),
+  }));
+}
+
 /** Live USD price for a stablecoin via Uniswap V3 (price tool). */
 export async function queryTokenPriceUsd(symbol: string): Promise<TokenPrice> {
   const address = TOKEN_ADDRESSES[symbol.toUpperCase()];

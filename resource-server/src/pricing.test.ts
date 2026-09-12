@@ -26,6 +26,10 @@ describe("price schedule", () => {
     expect(priceForTool("risk-scan").amountTinybar).toBe(200_000);
   });
 
+  it("prices whale-watch at 0.002 HBAR (200_000 tinybar)", () => {
+    expect(priceForTool("whale-watch").amountTinybar).toBe(200_000);
+  });
+
   it("rejects unknown tools", () => {
     // @ts-expect-error intentional: unknown tool must throw
     expect(() => priceForTool("everything")).toThrow(/unknown tool/);

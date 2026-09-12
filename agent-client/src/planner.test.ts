@@ -57,6 +57,12 @@ describe("parseDecision", () => {
     });
   });
 
+  it("accepts the whale-watch action with a symbol", () => {
+    expect(
+      parseDecision('{"action":"whale-watch","reason":"who supplies","symbol":"USDC"}'),
+    ).toEqual({ action: "whale-watch", reason: "who supplies", symbol: "USDC" });
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parseDecision("not json")).toThrow(/not JSON/);
   });

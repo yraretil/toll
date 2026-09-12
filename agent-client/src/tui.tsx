@@ -72,6 +72,17 @@ function digest(tool: string, body: unknown): string | null {
       .map((r) => `${String(r.symbol)} (${Array.isArray(r.flags) ? r.flags.join(", ") : "?"})`)
       .join(" · ")}`;
   }
+  if (tool === "whale-watch" && Array.isArray(b.whales)) {
+    const whales = b.whales as { user?: unknown; symbol?: unknown; approxSupplied?: unknown }[];
+    if (whales.length === 0) return "learned — no whale positions found";
+    return `learned — top ${String(b.symbol ?? "")} suppliers: ${whales
+      .slice(0, 3)
+      .map((w) => {
+        const amt = num(w.approxSupplied);
+        return `${String(w.user).slice(0, 8)}… ${amt === null ? "?" : fmtCompact(amt)}`;
+      })
+      .join(" · ")}`;
+  }
   if (tool === "history" && Array.isArray(b.history) && b.history.length > 0) {
     const last = b.history[b.history.length - 1] as MarketLike & { supplyApyPct?: unknown; utilizationPct?: unknown };
     const apy = num((last as { supplyApyPct?: unknown }).supplyApyPct);

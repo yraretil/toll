@@ -36,8 +36,11 @@ User task ──▶ Planner (LLM, Groq) ──▶ Toll resource server ──▶
 | Tool | Dataset | Price |
 |---|---|---|
 | `snapshot` | top-5 markets | 0.002 HBAR (200,000 tinybar) |
-| `history` | APY + utilization history | 0.008 HBAR (800,000 tinybar) |
-| `deep-dive` | per-market full detail | 0.002 HBAR (200,000 tinybar) |
+| `history` | APY + utilization history (USDC/DAI/USDT) | 0.008 HBAR (800,000 tinybar) |
+| `deep-dive` | per-market full detail (USDC/DAI/USDT) | 0.002 HBAR (200,000 tinybar) |
+| `price` | live USD price via Uniswap V3 (USDC/DAI/USDT) | 0.002 HBAR (200,000 tinybar) |
+| `risk-scan` | high-utilization / frozen / paused flags | 0.002 HBAR (200,000 tinybar) |
+| `whale-watch` | top suppliers per market (USDC/DAI/USDT) | 0.002 HBAR (200,000 tinybar) |
 
 Schedule lives in `resource-server/src/pricing.ts` (+ `pricing.test.ts`).
 
