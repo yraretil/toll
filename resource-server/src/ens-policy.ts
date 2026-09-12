@@ -99,10 +99,42 @@ export async function evmAddressOf(accountId: string): Promise<string> {
 }
 
 // In-memory daily spend ledger, keyed `${UTC-day}:${payer}`.
+// Resets on server restart and rolls over at UTC midnight.
 const daySpend = new Map<string, number>();
 
 function todayKey(payer: string): string {
   return `${new Date().toISOString().slice(0, 10)}:${payer}`;
+}
+
+/** Tinybar spent today by a payer (0 if none). */
+export function getDaySpent(payerAccount: string): number {
+  return daySpend.get(todayKey(payerAccount)) ?? 0;
+}
+
+export interface SpendStatus {
+  name: string;
+  day: string;
+  payer: string;
+  dailyCapTinybar: number;
+  spentTinybar: number;
+  remainingTinybar: number;
+}
+
+/** Live cap + spend for a payer (powers GET /status and the TUI card). */
+export async function spendStatus(payerAccount: string): Promise<SpendStatus> {
+  const agentName = process.env.ENS_AGENT_NAME ?? "";
+  const day = new Date().toISOString().slice(0, 10);
+  const spent = getDaySpent(payerAccount);
+  if (!agentName) return { name: "", day, payer: payerAccount, dailyCapTinybar: 0, spentTinybar: spent, remainingTinybar: 0 };
+  const policy = await readPolicy(agentName);
+  return {
+    name: agentName,
+    day,
+    payer: payerAccount,
+    dailyCapTinybar: policy.dailyCapTinybar,
+    spentTinybar: spent,
+    remainingTinybar: Math.max(0, policy.dailyCapTinybar - spent),
+  };
 }
 
 /** x402 v2 sends the payment payload in PAYMENT-SIGNATURE (v1 used X-PAYMENT). */

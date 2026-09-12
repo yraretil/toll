@@ -5,7 +5,7 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import { priceForTool, type TollTool } from "./pricing.js";
 import { queryHistory, queryMarketDetail, queryMarkets } from "./subgraph.js";
-import { enforcePolicy, paymentHeaderFrom } from "./ens-policy.js";
+import { enforcePolicy, paymentHeaderFrom, spendStatus } from "./ens-policy.js";
 
 const PORT = Number(process.env.PORT ?? 4021);
 // Verified T0.4: testnet base has NO /v1 suffix. Routes: /supported, /verify, /settle.
@@ -61,6 +61,20 @@ app.use(
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+// Unpaid: live cap + today's spend for a payer (powers the TUI budget card).
+app.get("/status", async (req, res) => {
+  try {
+    const payer = String(req.query.payer ?? "");
+    if (!payer) {
+      res.status(400).json({ error: "missing ?payer=0.0.x" });
+      return;
+    }
+    res.json(await spendStatus(payer));
+  } catch (err) {
+    res.status(502).json({ error: String(err) });
+  }
 });
 
 app.get("/data/ping", async (req, res) => {
