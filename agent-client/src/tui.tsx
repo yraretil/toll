@@ -15,6 +15,7 @@ import {
   type AgentIdentity,
 } from "./identity.js";
 import { DEFAULT_TASK, TOOLS } from "./catalog.js";
+import { cycleHistory, pushHistory } from "./history.js";
 import { policyClients, setPolicyRecord } from "../scripts/policy.js";
 
 const TIGHT_CAP = "100000";
@@ -81,7 +82,10 @@ function App(): React.JSX.Element {
   const [tight, setTight] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(true);
+  const [history, setHistory] = useState<string[]>([]);
+  const [histIdx, setHistIdx] = useState(0);
   const runningRef = useRef(false);
+  const draftRef = useRef<string | null>(null);
 
   const push = useCallback((line: string) => {
     setLines((prev) => [...prev.slice(-MAX_LINES + 1), line]);
@@ -109,6 +113,10 @@ function App(): React.JSX.Element {
       setPhase("running");
       setResult(null);
       setLines([]);
+      const nh = pushHistory(history, task);
+      setHistory(nh);
+      setHistIdx(nh.length);
+      draftRef.current = null;
       try {
         const accountId = process.env.HEDERA_ACCOUNT_ID;
         const privateKey = process.env.HEDERA_PRIVATE_KEY;
@@ -162,7 +170,7 @@ function App(): React.JSX.Element {
         setPhase("done");
       }
     },
-    [push],
+    [push, history],
   );
 
   const toggleCap = useCallback(async () => {
@@ -187,8 +195,23 @@ function App(): React.JSX.Element {
       setEditing(false);
       return;
     }
-    // While editing, keystrokes go to the task box (Enter submits it).
-    if (editing && phase === "idle" && !result) return;
+    // While editing, keystrokes go to the task box (Enter submits it,
+    // ↑/↓ recall previous prompts).
+    if (editing && phase === "idle" && !result) {
+      if (key.upArrow || key.downArrow) {
+        if (draftRef.current === null && key.upArrow) draftRef.current = taskDraft;
+        const s = cycleHistory(
+          history,
+          draftRef.current ?? taskDraft,
+          histIdx,
+          key.upArrow ? "up" : "down",
+        );
+        setTaskDraft(s.value);
+        setHistIdx(s.index);
+        if (s.index === history.length) draftRef.current = null;
+      }
+      return;
+    }
     if (input === "q") exit();
     if (phase === "done" && input === "i") {
       setResult(null);
@@ -229,12 +252,18 @@ function App(): React.JSX.Element {
           <>
             <TextInput
               value={taskDraft}
-              onChange={setTaskDraft}
+              onChange={(v) => {
+                setTaskDraft(v);
+                draftRef.current = null;
+                setHistIdx(history.length);
+              }}
               onSubmit={(v) => void run(v)}
               focus={editing}
             />
             <Text dimColor>
-              {editing ? "typing… (Enter: run · Esc: commands)" : "commands ([i]: edit task)"}
+              {editing
+                ? "typing… (Enter: run · ↑/↓: history · Esc: commands)"
+                : "commands ([i]: edit task)"}
             </Text>
           </>
         ) : (
