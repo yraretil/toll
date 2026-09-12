@@ -82,7 +82,7 @@ export async function loadIdentity(): Promise<AgentIdentity> {
     balanceTinybar,
     dailyCapTinybar: Number(dailyCap ?? "2000000"),
     maxPerRequestTinybar: Number(maxPerRequest ?? "2000000"),
-    allowedTools: allowedTools ?? "snapshot,history,deep-dive",
+    allowedTools: allowedTools ?? "snapshot,history,deep-dive,price,risk-scan,whale-watch",
     riskTier: riskTier ?? "research",
   };
 }
