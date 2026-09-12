@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MAX_PURCHASES,
   parseDecision,
+  pathFor,
   runPlannerLoop,
   type LlmCall,
   type PurchaseFn,
@@ -13,8 +14,8 @@ import {
 
 const TOOLS: Record<string, ToolSpec> = {
   snapshot: { path: "/data/snapshot", priceTinybar: 200_000 },
-  history: { path: "/data/history?symbol=USDC", priceTinybar: 800_000 },
-  "deep-dive": { path: "/data/deep-dive?symbol=USDC", priceTinybar: 200_000 },
+  history: { path: "/data/history?symbol={symbol}", priceTinybar: 800_000, defaultSymbol: "USDC" },
+  "deep-dive": { path: "/data/deep-dive?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
 };
 
 function llmReturning(outputs: string[]): LlmCall {
@@ -52,6 +53,32 @@ describe("parseDecision", () => {
 
   it("rejects missing reason", () => {
     expect(() => parseDecision('{"action":"snapshot"}')).toThrow(/reason/);
+  });
+
+  it("accepts a valid symbol (case-insensitive)", () => {
+    expect(
+      parseDecision('{"action":"deep-dive","reason":"compare","symbol":"dai"}'),
+    ).toEqual({ action: "deep-dive", reason: "compare", symbol: "DAI" });
+  });
+
+  it("rejects unknown symbols", () => {
+    expect(
+      () => parseDecision('{"action":"deep-dive","reason":"x","symbol":"BTC"}'),
+    ).toThrow(/invalid symbol/);
+  });
+});
+
+describe("pathFor", () => {
+  it("substitutes the decision symbol", () => {
+    expect(pathFor(TOOLS["deep-dive"], "USDT")).toBe("/data/deep-dive?symbol=USDT");
+  });
+
+  it("falls back to the default symbol", () => {
+    expect(pathFor(TOOLS["deep-dive"])).toBe("/data/deep-dive?symbol=USDC");
+  });
+
+  it("leaves symbol-less paths alone", () => {
+    expect(pathFor(TOOLS.snapshot, "DAI")).toBe("/data/snapshot");
   });
 });
 
@@ -127,5 +154,26 @@ describe("runPlannerLoop", () => {
     expect(purchase.calls).toEqual([]);
     expect(result.totalSpentTinybar).toBe(0);
     expect(result.stopped).toMatch(/not offered/);
+  });
+
+  it("shops across symbols when asked to compare", async () => {
+    const purchase = mockPurchase();
+    const result = await runPlannerLoop({
+      task: "compare stables",
+      budgetTinybar: 2_000_000,
+      tools: TOOLS,
+      llmCall: llmReturning([
+        '{"action":"deep-dive","reason":"usdc first","symbol":"USDC"}',
+        '{"action":"deep-dive","reason":"then dai","symbol":"DAI"}',
+        '{"action":"recommend","reason":"DAI wins"}',
+      ]),
+      purchase,
+    });
+    expect(result.purchases.map((p) => p.path)).toEqual([
+      "/data/deep-dive?symbol=USDC",
+      "/data/deep-dive?symbol=DAI",
+    ]);
+    expect(result.totalSpentTinybar).toBe(400_000);
+    expect(result.answer).toContain("DAI wins");
   });
 });

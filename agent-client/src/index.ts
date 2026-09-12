@@ -20,8 +20,8 @@ const TASK = "Find the best USDC lending opportunity on Aave V3.";
 
 const TOOLS: Record<string, ToolSpec> = {
   snapshot: { path: "/data/snapshot", priceTinybar: 200_000 },
-  history: { path: "/data/history?symbol=USDC", priceTinybar: 800_000 },
-  "deep-dive": { path: "/data/deep-dive?symbol=USDC", priceTinybar: 200_000 },
+  history: { path: "/data/history?symbol={symbol}", priceTinybar: 800_000, defaultSymbol: "USDC" },
+  "deep-dive": { path: "/data/deep-dive?symbol={symbol}", priceTinybar: 200_000, defaultSymbol: "USDC" },
 };
 
 function log(...args: unknown[]): void {

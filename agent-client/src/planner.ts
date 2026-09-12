@@ -7,7 +7,13 @@ export type PlannerAction = "snapshot" | "history" | "deep-dive" | "recommend";
 export interface PlannerDecision {
   action: PlannerAction;
   reason: string;
+  /** Optional market symbol for symbol-aware tools (deep-dive, history). */
+  symbol?: MarketSymbol;
 }
+
+export type MarketSymbol = "USDC" | "DAI" | "USDT";
+
+const SYMBOLS: MarketSymbol[] = ["USDC", "DAI", "USDT"];
 
 const ACTIONS: PlannerAction[] = ["snapshot", "history", "deep-dive", "recommend"];
 
@@ -24,14 +30,21 @@ export function parseDecision(raw: string): PlannerDecision {
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error("planner output must be a JSON object");
   }
-  const { action, reason } = parsed as Record<string, unknown>;
+  const { action, reason, symbol } = parsed as Record<string, unknown>;
   if (typeof action !== "string" || !(ACTIONS as string[]).includes(action)) {
     throw new Error(`invalid action: ${String(action)}`);
   }
   if (typeof reason !== "string" || reason.length === 0) {
     throw new Error("planner output must include a non-empty reason");
   }
-  return { action: action as PlannerAction, reason };
+  let normalizedSymbol: MarketSymbol | undefined;
+  if (symbol !== undefined) {
+    if (typeof symbol !== "string" || !(SYMBOLS as string[]).includes(symbol.toUpperCase())) {
+      throw new Error(`invalid symbol: ${String(symbol)} (want one of ${SYMBOLS.join(",")})`);
+    }
+    normalizedSymbol = symbol.toUpperCase() as MarketSymbol;
+  }
+  return { action: action as PlannerAction, reason, symbol: normalizedSymbol };
 }
 
 export interface ChatMessage {
@@ -42,8 +55,17 @@ export interface ChatMessage {
 export type LlmCall = (messages: ChatMessage[]) => Promise<string>;
 
 export interface ToolSpec {
+  /** Path template; {symbol} is substituted when the tool takes a symbol. */
   path: string;
   priceTinybar: number;
+  /** Default symbol when the decision omits one (undefined = tool takes no symbol). */
+  defaultSymbol?: MarketSymbol;
+}
+
+export function pathFor(spec: ToolSpec, symbol?: MarketSymbol): string {
+  const sym = symbol ?? spec.defaultSymbol;
+  if (sym && spec.path.includes("{symbol}")) return spec.path.replace("{symbol}", sym);
+  return spec.path;
 }
 
 export type PurchaseFn = (
@@ -54,6 +76,7 @@ export type PurchaseFn = (
 export interface Purchase {
   tool: string;
   path: string;
+  symbol?: MarketSymbol;
   amountTinybar: number;
   body: unknown;
 }
@@ -71,14 +94,17 @@ function systemPrompt(
   tools: Record<string, ToolSpec>,
 ): string {
   const catalog = Object.entries(tools)
-    .map(([name, spec]) => `- ${name}: ${spec.path} (price ${spec.priceTinybar} tinybar)`)
+    .map(([name, spec]) => {
+      const symbols = spec.defaultSymbol ? ` (symbols: ${SYMBOLS.join(",")})` : "";
+      return `- ${name}: ${spec.path}${symbols} (price ${spec.priceTinybar} tinybar)`;
+    })
     .join("\n");
   return [
     `You are Toll, an AI agent that buys live on-chain data to answer: "${task}".`,
     `You have a budget of ${budgetTinybar} tinybar (1 HBAR = 100000000 tinybar).`,
     "Purchasable datasets:",
     catalog,
-    'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "recommend", "reason": "string"}.',
+    'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "recommend", "reason": "string", "symbol": "optional USDC|DAI|USDT for history/deep-dive"}.',
     'Choose "recommend" with your final grounded answer in `reason` when you have enough data.',
   ].join("\n");
 }
@@ -155,18 +181,20 @@ export async function runPlannerLoop(opts: {
           `${decision.action} costs ${spec.priceTinybar}, budget ${opts.budgetTinybar})`,
       };
     }
-    const { body } = await opts.purchase(decision.action, spec.path);
+    const { body } = await opts.purchase(decision.action, pathFor(spec, decision.symbol));
     spent += spec.priceTinybar;
     purchases.push({
       tool: decision.action,
-      path: spec.path,
+      path: pathFor(spec, decision.symbol),
+      symbol: decision.symbol ?? spec.defaultSymbol,
       amountTinybar: spec.priceTinybar,
       body,
     });
     messages.push({
       role: "user",
       content:
-        `Purchased ${decision.action} for ${spec.priceTinybar} tinybar ` +
+        `Purchased ${decision.action}${decision.symbol ? ` (${decision.symbol})` : ""} ` +
+        `for ${spec.priceTinybar} tinybar ` +
         `(spent ${spent}/${opts.budgetTinybar}). Result: ${JSON.stringify(body).slice(0, 2000)}` +
         ` What next?`,
     });
