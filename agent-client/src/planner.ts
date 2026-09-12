@@ -107,6 +107,11 @@ function systemPrompt(
     'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "price" | "recommend", "reason": "string", "symbol": "optional USDC|DAI|USDT for history/deep-dive/price"}.',
     'Choose "recommend" with your final grounded answer in `reason` when you have enough data.',
     'If the task needs no market data (a greeting, chit-chat, or anything off-topic), choose "recommend" immediately with a brief reply — never buy data you do not need.',
+    'If the task asks only for a token price, buy "price" for that symbol directly — do not buy lending datasets first.',
+    'Stop the moment the task is answered: never gather extra context beyond what was asked.',
+    'Example — task "what is the USDC dollar price right now": first',
+    '{"action":"price","reason":"need current USDC price","symbol":"USDC"}, then',
+    '{"action":"recommend","reason":"USDC is $1.00"} — done, 200000 tinybar total.',
   ].join("\n");
 }
 
