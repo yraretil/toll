@@ -60,9 +60,18 @@ async function main(): Promise<void> {
     log("LLM_API_KEY unset — deterministic fallback: buying every dataset once");
     let spent = 0;
     for (const [tool, spec] of Object.entries(TOOLS)) {
+      if (spent + spec.priceTinybar > remaining) {
+        log(`stopping: ${tool} (${spec.priceTinybar}) exceeds remaining budget (${remaining - spent})`);
+        break;
+      }
       const path = pathFor(spec);
       log(`▸ buying ${tool} (${spec.priceTinybar} tinybar)…`);
-      await purchase(tool, path);
+      try {
+        await purchase(tool, path);
+      } catch (err) {
+        log(`stopping: purchase failed (${String(err)})`);
+        break;
+      }
       spent += spec.priceTinybar;
     }
     log(`total spent: ${tinybarToHbar(spent)} HBAR`);
