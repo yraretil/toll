@@ -132,8 +132,18 @@ function App(): React.JSX.Element {
         if (!llmKey) throw new Error("LLM_API_KEY missing in .env");
         const id = await loadIdentity();
         setIdentity(id);
+        const spendNow = await loadSpend(serverUrl, accountId);
+        setSpend(spendNow);
+        const remaining = spendNow?.remainingTinybar ?? id.dailyCapTinybar;
+        if (remaining <= 0) {
+          const reason = `day budget exhausted on the server (spent ${spendNow?.spentTinybar}/${id.dailyCapTinybar}) — restart the server to reset the ledger, or raise spend.dailyCap`;
+          push(reason);
+          setResult({ answer: "", totalSpentTinybar: 0, purchases: [], stopped: reason });
+          return;
+        }
+        const budget = Math.min(id.dailyCapTinybar, remaining);
         push(`task: ${task}`);
-        push(`budget: ${id.dailyCapTinybar} tinybar (spend.dailyCap on ${id.name})`);
+        push(`budget this run: ${budget} tinybar (cap ${id.dailyCapTinybar}, server has ${remaining} left)`);
         const purchase = createBuyer({
           serverUrl,
           accountId,
@@ -150,7 +160,7 @@ function App(): React.JSX.Element {
         );
         const res = await runPlannerLoop({
           task,
-          budgetTinybar: id.dailyCapTinybar,
+          budgetTinybar: budget,
           tools: TOOLS,
           llmCall,
           purchase,
@@ -257,8 +267,8 @@ function App(): React.JSX.Element {
           </Text>
           <Text dimColor>
             {spend
-              ? `day spend ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar`
-              : "day spend: server offline?"}
+              ? `today ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar (server day ledger, all runs)`
+              : "today spend: server offline?"}
           </Text>
         </Box>
       )}

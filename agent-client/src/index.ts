@@ -8,7 +8,7 @@ import {
   runPlannerLoop,
 } from "./planner.js";
 import { createBuyer, type Settlement } from "./buyer.js";
-import { hashscanUrl, loadIdentity, tinybarToHbar } from "./identity.js";
+import { hashscanUrl, loadIdentity, loadSpend, tinybarToHbar } from "./identity.js";
 import { LEGACY_TASK, TOOLS } from "./catalog.js";
 
 const TASK = LEGACY_TASK;
@@ -48,6 +48,14 @@ async function main(): Promise<void> {
   });
 
   const llmKey = process.env.LLM_API_KEY ?? "";
+  const spendNow = await loadSpend(serverUrl, accountId);
+  const remaining = spendNow?.remainingTinybar ?? identity.dailyCapTinybar;
+  if (remaining <= 0) {
+    log(
+      `day budget exhausted on the server (spent ${spendNow?.spentTinybar}/${identity.dailyCapTinybar}) — restart the server to reset the ledger, or raise spend.dailyCap`,
+    );
+    return;
+  }
   if (!llmKey) {
     log("LLM_API_KEY unset — deterministic fallback: buying every dataset once");
     let spent = 0;
@@ -67,10 +75,11 @@ async function main(): Promise<void> {
     process.env.LLM_MODEL ?? "openai/gpt-oss-120b",
   );
   log(`task: ${TASK}`);
-  log(`budget: ${identity.dailyCapTinybar} tinybar (spend.dailyCap on ${identity.name})`);
+  const budget = Math.min(identity.dailyCapTinybar, remaining);
+  log(`budget this run: ${budget} tinybar (cap ${identity.dailyCapTinybar}, server has ${remaining} left)`);
   const result = await runPlannerLoop({
     task: TASK,
-    budgetTinybar: identity.dailyCapTinybar,
+    budgetTinybar: budget,
     tools: TOOLS,
     llmCall,
     purchase,

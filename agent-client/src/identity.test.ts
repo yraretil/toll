@@ -20,6 +20,8 @@ describe("fmtCompact", () => {
     expect(fmtCompact(1_979_949_054)).toBe("1.98B");
     expect(fmtCompact(169_400_653)).toBe("169.40M");
     expect(fmtCompact(2500)).toBe("2.5K");
+    expect(fmtCompact(600_000)).toBe("600K");
+    expect(fmtCompact(2_000_000)).toBe("2M");
     expect(fmtCompact(91.43)).toBe("91.43");
   });
 });
