@@ -210,5 +210,12 @@ export async function enforcePolicy(
     };
   }
   daySpend.set(key, spent + amountTinybar);
-  return { ok: true, policy, payerAccount, payerEvm, requestedTinybar: amountTinybar };
+  return {
+    ok: true,
+    policy,
+    payerAccount,
+    payerEvm,
+    requestedTinybar: amountTinybar,
+    daySpentTinybar: spent + amountTinybar,
+  };
 }
