@@ -17,21 +17,13 @@ import {
   type SpendStatus,
 } from "./identity.js";
 import { DEFAULT_TASK, TOOLS, TOOL_BLURBS } from "./catalog.js";
+import { BANNER, BANNER_WIDTH } from "./banner.js";
 import { cycleHistory, pushHistory } from "./history.js";
 import { policyClients, setPolicyRecord } from "../scripts/policy.js";
 
 const TIGHT_CAP = "100000";
 const OPEN_CAP = "2000000";
 const MAX_LINES = 24;
-
-// CP437 block-letter banner (verified equal-width rows at build).
-const BANNER = [
-  "████████╗  ██╔═══██╗  ██╗    ██╗",
-  "╚══██╔══╝  ██║   ██║  ██║    ██║",
-  "   ██║     ██║   ██║  ██║    ██║",
-  "   ██║     ██║   ██║  ██║    ██║",
-  "   ██║     ╚██████╔╝  ██████╗█████╗",
-];
 
 /** Display labels only — hosts and model names are public, keys never are. */
 function llmLabel(): string {
