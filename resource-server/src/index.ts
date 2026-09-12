@@ -32,8 +32,6 @@ function acceptsFor(tool: TollTool) {
   } as const;
 }
 
-const snapshot = priceForTool("snapshot");
-
 const app = express();
 
 // Raw-terminal proof log: every /data hit, before the paywall sees it.
