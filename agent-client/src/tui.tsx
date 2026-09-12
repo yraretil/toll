@@ -109,6 +109,46 @@ function digest(tool: string, body: unknown): string | null {
   return null;
 }
 
+/** Color/weight for one activity-log line, inferred from its existing prefix
+ * glyph (▸ ✓ ✕ ↳) — purely cosmetic, no change to what gets pushed. */
+function lineStyle(line: string): { color?: string; dim?: boolean; bold?: boolean } {
+  const t = line.trimStart();
+  if (t.startsWith("▸")) return { color: "cyanBright", bold: true };
+  if (t.startsWith("✓")) return { color: "green" };
+  if (t.startsWith("✕")) return { color: "red", bold: true };
+  if (t.startsWith("↳")) return { dim: true };
+  if (t.startsWith("http")) return { color: "blue", dim: true };
+  if (t.startsWith("learned")) return { color: "yellowBright" };
+  if (t.startsWith("task:")) return { bold: true };
+  if (t.startsWith("budget") || t.startsWith("total spent")) return { color: "yellow" };
+  if (t.startsWith("error:")) return { color: "red", bold: true };
+  return { dim: true };
+}
+
+/** Full-width horizontal rule via a border-only Box — stretches with the
+ * terminal instead of a fixed-width repeated glyph. */
+function Rule({ color = "gray" }: { color?: string }): React.JSX.Element {
+  return (
+    <Box
+      borderStyle="single"
+      borderColor={color}
+      borderTop={true}
+      borderBottom={false}
+      borderLeft={false}
+      borderRight={false}
+    />
+  );
+}
+
+/** "[x] label" footer hint with the bracketed key picked out in color. */
+function Key({ k, label }: { k: string; label: string }): React.JSX.Element {
+  return (
+    <Text dimColor>
+      [<Text color="cyanBright" bold>{k}</Text>]{label}
+    </Text>
+  );
+}
+
 type Phase = "boot" | "idle" | "running" | "done";
 
 function App(): React.JSX.Element {
@@ -297,52 +337,76 @@ function App(): React.JSX.Element {
     if (phase !== "running" && input === "i") setEditing(true);
   });
 
+  const taskBorderColor = editing ? "cyanBright" : phase === "done" ? "green" : "gray";
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} height="100%">
-      <Box flexDirection="column" width={BANNER_WIDTH} alignSelf="center">
+      <Box flexDirection="column" width={BANNER_WIDTH} alignSelf="center" marginBottom={0}>
         {BANNER.map((line, i) => (
-          <Text key={i} bold color="cyan">
+          <Text key={i} bold color="cyanBright">
             {line}
           </Text>
         ))}
+        <Text dimColor>{" ".repeat(Math.max(0, (BANNER_WIDTH - 26) / 2))}agentic buyer · x402 · hedera</Text>
       </Box>
-      <Text>
-        agent : {identity ? identity.name : "…"} {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
-      </Text>
-      <Text dimColor>press h for help</Text>
-      <Text dimColor>{"░".repeat(64)}</Text>
-      {phase === "boot" || !identity ? (
+
+      <Box justifyContent="space-between">
         <Text>
-          <Spinner type="dots" /> loading identity + policy from Sepolia…
+          <Text dimColor>agent </Text>
+          <Text bold color="magentaBright">{identity ? identity.name : "…"}</Text>
+        </Text>
+        <Text>
+          {tight ? (
+            <Text bold color="red" inverse>
+              {" "}CAPS TIGHT{" "}
+            </Text>
+          ) : (
+            <Text dimColor>press h for help</Text>
+          )}
+        </Text>
+      </Box>
+      <Rule color="gray" />
+
+      {phase === "boot" || !identity ? (
+        <Text color="cyanBright">
+          <Spinner type="dots" /> <Text dimColor>loading identity + policy from Sepolia…</Text>
         </Text>
       ) : null}
+
       {showHelp && identity ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>DASHBOARD</Text>
-          <Text dimColor>chain : hedera:testnet</Text>
-          <Text dimColor>facilitator : blocky402 testnet</Text>
-          <Text dimColor>api : {llmLabel()}</Text>
-          <Text dimColor>account : {identity.payerAccount}</Text>
+        <Box
+          marginTop={1}
+          flexDirection="column"
+          borderStyle="round"
+          borderColor="magenta"
+          paddingX={1}
+        >
+          <Text bold color="magentaBright">◆ DASHBOARD</Text>
+          <Text dimColor>chain <Text color="white">hedera:testnet</Text></Text>
+          <Text dimColor>facilitator <Text color="white">blocky402 testnet</Text></Text>
+          <Text dimColor>api <Text color="white">{llmLabel()}</Text></Text>
+          <Text dimColor>account <Text color="white">{identity.payerAccount}</Text></Text>
           <Text dimColor>
-            hbar : {tinybarToHbar(identity.balanceTinybar)} HBAR
+            hbar <Text color="yellowBright">{tinybarToHbar(identity.balanceTinybar)} HBAR</Text>
           </Text>
-          <Text bold>POLICY</Text>
-          <Text dimColor>spend.dailyCap {identity.dailyCapTinybar}</Text>
-          <Text dimColor>spend.maxPerRequest {identity.maxPerRequestTinybar}</Text>
-          <Text dimColor>spend.allowedTools {identity.allowedTools}</Text>
-          <Text dimColor>toll.riskTier {identity.riskTier}</Text>
+
+          <Text bold color="magentaBright">{"\n"}◆ POLICY</Text>
+          <Text dimColor>spend.dailyCap <Text color="white">{identity.dailyCapTinybar}</Text></Text>
+          <Text dimColor>spend.maxPerRequest <Text color="white">{identity.maxPerRequestTinybar}</Text></Text>
+          <Text dimColor>spend.allowedTools <Text color="white">{identity.allowedTools}</Text></Text>
+          <Text dimColor>toll.riskTier <Text color="white">{identity.riskTier}</Text></Text>
           <Text dimColor>
-            resolver {identity.resolver || "(loading…)"}
-            {identity.resolver ? " · sepolia.etherscan.io" : ""}
+            resolver <Text color="white">{identity.resolver || "(loading…)"}</Text>
+            {identity.resolver ? <Text dimColor> · sepolia.etherscan.io</Text> : ""}
           </Text>
           <Text dimColor>
-            name {identity.name} → {identity.address || "(loading…)"}
+            name <Text color="white">{identity.name}</Text> → <Text color="white">{identity.address || "(loading…)"}</Text>
           </Text>
           <Text dimColor>
             {spend ? (
               <>
                 today {fmtCompact(spend.spentTinybar)}/{fmtCompact(spend.dailyCapTinybar)} · left{" "}
-                <Text color="yellow">
+                <Text color="yellowBright" bold>
                   {fmtCompact(spend.remainingTinybar)} tinybar
                 </Text>{" "}
                 (server day ledger)
@@ -351,16 +415,19 @@ function App(): React.JSX.Element {
               "today spend: server offline?"
             )}
           </Text>
-          <Text bold>TOOLS</Text>
+
+          <Text bold color="magentaBright">{"\n"}◆ TOOLS</Text>
           {Object.entries(TOOLS).map(([name, spec]) => (
             <Text key={name} dimColor>
-              {name} {fmtCompact(spec.priceTinybar)} — {TOOL_BLURBS[name] ?? ""}
+              <Text color="cyanBright">{name}</Text>{" "}
+              <Text color="yellow">{fmtCompact(spec.priceTinybar)}</Text> — {TOOL_BLURBS[name] ?? ""}
             </Text>
           ))}
         </Box>
       ) : null}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>task</Text>
+
+      <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor={taskBorderColor} paddingX={1}>
+        <Text bold color={taskBorderColor}>TASK</Text>
         {phase === "idle" && !result ? (
           <>
             <TextInput
@@ -383,47 +450,81 @@ function App(): React.JSX.Element {
           <Text>{taskDraft}</Text>
         )}
       </Box>
-      <Box marginTop={1} flexDirection="column" flexGrow={1}>
-        {lines.map((l, i) => (
-          <Text key={i} wrap="wrap">
-            {l}
-          </Text>
-        ))}
+
+      <Box
+        marginTop={1}
+        flexDirection="column"
+        flexGrow={1}
+        borderStyle="round"
+        borderColor="gray"
+        paddingX={1}
+      >
+        <Text bold dimColor>ACTIVITY</Text>
+        {lines.length === 0 && phase !== "running" ? (
+          <Text dimColor>· nothing yet — run a task to see the planner work</Text>
+        ) : null}
+        {lines.map((l, i) => {
+          const s = lineStyle(l);
+          return (
+            <Text key={i} wrap="wrap" color={s.color} dimColor={s.dim} bold={s.bold}>
+              {l}
+            </Text>
+          );
+        })}
         {phase === "running" && (
-          <Text>
+          <Text color="cyanBright">
             <Spinner type="dots" /> working…
           </Text>
         )}
       </Box>
+
       {result?.answer ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>answer</Text>
+        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
+          <Text bold color="greenBright">✓ ANSWER</Text>
           <Text wrap="wrap">{result.answer}</Text>
         </Box>
       ) : null}
-      <Text dimColor>{"░".repeat(64)}</Text>
+
+      <Rule color="gray" />
       <Box flexDirection="column">
-        <Text dimColor>
-          [q]uit{result && phase !== "running" ? " · [r]erun" : ""}
-          {phase === "done" ? " · [i]/[Enter] new prompt" : ""}
-          {phase !== "running" ? " · [h]elp" : ""}
+        <Text>
+          <Key k="q" label="uit" />
+          {result && phase !== "running" ? (
+            <>
+              {"  "}
+              <Key k="r" label="erun" />
+            </>
+          ) : null}
+          {phase === "done" ? (
+            <>
+              {"  "}
+              <Key k="i" label="/[Enter] new prompt" />
+            </>
+          ) : null}
+          {phase !== "running" ? (
+            <>
+              {"  "}
+              <Key k="h" label="elp" />
+            </>
+          ) : null}
         </Text>
         {phase !== "running" || result ? (
-          <Text dimColor>
-            {phase !== "running" ? "[t]ighten/restore caps" : ""}
+          <Text>
+            {phase !== "running" ? <Key k="t" label="ighten/restore caps" /> : ""}
             {result ? (
-              <>
-                {" · total "}
-                <Text color="yellow">{tinybarToHbar(result.totalSpentTinybar)} HBAR</Text>
-              </>
+              <Text dimColor>
+                {phase !== "running" ? "  ·  " : ""}total{" "}
+                <Text bold color="yellowBright">{tinybarToHbar(result.totalSpentTinybar)} HBAR</Text>
+              </Text>
             ) : (
               ""
             )}
           </Text>
         ) : null}
       </Box>
+
       {busy ? (
-        <Text>
+        <Text color="magentaBright">
           <Spinner type="dots" /> writing policy to Sepolia…
         </Text>
       ) : null}
