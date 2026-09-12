@@ -196,8 +196,22 @@ describe("runPlannerLoop", () => {
     expect(events).toEqual(["decision:snapshot", "purchase", "decision:recommend", "answer"]);
   });
 
-  it("stops with zero spend when the purchase is rejected pre-payment", async () => {
-    const failing: PurchaseFn = async () => {
+  it("recommends immediately with zero spend when no data is needed", async () => {
+    const purchase = mockPurchase();
+    const result = await runPlannerLoop({
+      task: "hello",
+      budgetTinybar: 2_000_000,
+      tools: TOOLS,
+      llmCall: llmReturning(['{"action":"recommend","reason":"Hi! Ask me about lending markets."}']),
+      purchase,
+    });
+    expect(purchase.calls).toEqual([]);
+    expect(result.totalSpentTinybar).toBe(0);
+    expect(result.answer).toContain("Hi!");
+    expect(result.stopped).toBeNull();
+  });
+
+  it("stops with zero spend when the purchase is rejected pre-payment", async () => {    const failing: PurchaseFn = async () => {
       throw new Error("Budget policy exceeded. Requested 200000, allowed 100000. STOPPING.");
     };
     const events: string[] = [];

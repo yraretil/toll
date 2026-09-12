@@ -106,6 +106,7 @@ function systemPrompt(
     catalog,
     'Reply with STRICT JSON only: {"action": "snapshot" | "history" | "deep-dive" | "recommend", "reason": "string", "symbol": "optional USDC|DAI|USDT for history/deep-dive"}.',
     'Choose "recommend" with your final grounded answer in `reason` when you have enough data.',
+    'If the task needs no market data (a greeting, chit-chat, or anything off-topic), choose "recommend" immediately with a brief reply — never buy data you do not need.',
   ].join("\n");
 }
 
