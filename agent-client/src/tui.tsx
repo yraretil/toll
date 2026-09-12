@@ -24,6 +24,15 @@ const TIGHT_CAP = "100000";
 const OPEN_CAP = "2000000";
 const MAX_LINES = 24;
 
+// CP437 block-letter banner (verified equal-width rows at build).
+const BANNER = [
+  "████████╗  ██╔═══██╗  ██╗    ██╗",
+  "╚══██╔══╝  ██║   ██║  ██║    ██║",
+  "   ██║     ██║   ██║  ██║    ██║",
+  "   ██║     ██║   ██║  ██║    ██║",
+  "   ██║     ╚██████╔╝  ██████╗█████╗",
+];
+
 /** Display labels only — hosts and model names are public, keys never are. */
 function llmLabel(): string {
   const base = process.env.LLM_BASE_URL ?? "";
@@ -103,10 +112,6 @@ function digest(tool: string, body: unknown): string | null {
     return `learned — ${String(b.symbol)} ${(b.history as unknown[]).length} pts · latest ${apy === null ? "?" : `${apy.toFixed(2)}%`} · util ${util === null ? "?" : `${util.toFixed(1)}%`}`;
   }
   return null;
-}
-
-function shortAddr(addr: string): string {
-  return addr.length > 14 ? `${addr.slice(0, 8)}…${addr.slice(-6)}` : addr;
 }
 
 type Phase = "boot" | "idle" | "running" | "done";
@@ -299,54 +304,59 @@ function App(): React.JSX.Element {
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-      <Text bold color="cyan">
-        Toll · agent: {identity ? identity.name : "…"} (press h for help){" "}
-        {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
+      <Box flexDirection="column" alignItems="center">
+        {BANNER.map((line, i) => (
+          <Text key={i} bold color="cyan">
+            {line}
+          </Text>
+        ))}
+      </Box>
+      <Text>
+        agent : {identity ? identity.name : "…"} {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
       </Text>
-      <Text dimColor>chain hedera:testnet · facilitator blocky402 testnet · llm {llmLabel()}</Text>
+      <Text dimColor>press h for help</Text>
       {phase === "boot" || !identity ? (
         <Text>
           <Spinner type="dots" /> loading identity + policy from Sepolia…
         </Text>
-      ) : (
-        <Box flexDirection="column">
+      ) : null}
+      {showHelp && identity ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text bold>DASHBOARD</Text>
+          <Text dimColor>chain : hedera:testnet</Text>
+          <Text dimColor>facilitator : blocky402 testnet</Text>
+          <Text dimColor>api : {llmLabel()}</Text>
+          <Text dimColor>account : {identity.payerAccount}</Text>
           <Text dimColor>
-            account {identity.payerAccount} · {tinybarToHbar(identity.balanceTinybar)} HBAR ·{" "}
-            {shortAddr(identity.address)}
+            hbar : {tinybarToHbar(identity.balanceTinybar)} HBAR
           </Text>
-          <Text bold>policy (on ENSv2 Sepolia — enforced at payment time)</Text>
           <Text dimColor>
-            dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
-            {identity.maxPerRequestTinybar} · tools {identity.allowedTools} · {identity.riskTier}
+            policy : dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
+            {identity.maxPerRequestTinybar}
           </Text>
+          <Text bold>POLICY</Text>
+          <Text dimColor>spend.dailyCap {identity.dailyCapTinybar}</Text>
+          <Text dimColor>spend.maxPerRequest {identity.maxPerRequestTinybar}</Text>
+          <Text dimColor>spend.allowedTools {identity.allowedTools}</Text>
+          <Text dimColor>toll.riskTier {identity.riskTier}</Text>
           <Text dimColor>
             resolver {identity.resolver || "(loading…)"}
             {identity.resolver ? " · sepolia.etherscan.io" : ""}
           </Text>
           <Text dimColor>
+            name {identity.name} → {identity.address || "(loading…)"}
+          </Text>
+          <Text dimColor>
             {spend
-              ? `today ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar (server day ledger, all runs)`
+              ? `today ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar (server day ledger)`
               : "today spend: server offline?"}
           </Text>
-          <Text bold>tools (priced per query in tinybar)</Text>
+          <Text bold>TOOLS</Text>
           {Object.entries(TOOLS).map(([name, spec]) => (
             <Text key={name} dimColor>
-              {"  "}{name} {fmtCompact(spec.priceTinybar)} — {TOOL_BLURBS[name] ?? ""}
+              {name} {fmtCompact(spec.priceTinybar)} — {TOOL_BLURBS[name] ?? ""}
             </Text>
           ))}
-        </Box>
-      )}
-      {showHelp ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="single" paddingX={1}>
-          <Text bold>help</Text>
-          <Text dimColor>Enter run · ↑/↓ prompt history · Esc commands · i edit task</Text>
-          <Text dimColor>r rerun · t tighten/restore caps · h help · q quit</Text>
-          <Text dimColor>left terminal (server log) = proof: quotes, paid retries, ✓/✕ verdicts</Text>
-          <Text dimColor>this screen = story: identity, policy, purchases, HashScan receipts</Text>
-          <Text dimColor>
-            everything shown is public (ENS records, account IDs, balances, tx hashes)
-          </Text>
-          <Text dimColor>private keys + API keys are never displayed — press any key to close</Text>
         </Box>
       ) : null}
       <Box marginTop={1} flexDirection="column">
