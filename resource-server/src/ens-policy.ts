@@ -105,6 +105,13 @@ function todayKey(payer: string): string {
   return `${new Date().toISOString().slice(0, 10)}:${payer}`;
 }
 
+/** x402 v2 sends the payment payload in PAYMENT-SIGNATURE (v1 used X-PAYMENT). */
+export function paymentHeaderFrom(req: {
+  header: (name: string) => string | undefined;
+}): string | null {
+  return req.header("PAYMENT-SIGNATURE") ?? req.header("X-PAYMENT") ?? null;
+}
+
 /** Enforce the on-chain policy for one paid request. */
 export async function enforcePolicy(
   tool: TollTool,

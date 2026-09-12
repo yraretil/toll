@@ -5,7 +5,7 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import { priceForTool, type TollTool } from "./pricing.js";
 import { queryHistory, queryMarketDetail, queryMarkets } from "./subgraph.js";
-import { enforcePolicy } from "./ens-policy.js";
+import { enforcePolicy, paymentHeaderFrom } from "./ens-policy.js";
 
 const PORT = Number(process.env.PORT ?? 4021);
 // Verified T0.4: testnet base has NO /v1 suffix. Routes: /supported, /verify, /settle.
@@ -63,14 +63,9 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-/** x402 v2 sends the payment payload in PAYMENT-SIGNATURE (v1 used X-PAYMENT). */
-function paymentHeader(req: { header: (name: string) => string | undefined }): string | null {
-  return req.header("PAYMENT-SIGNATURE") ?? paymentHeader(req) ?? null;
-}
-
 app.get("/data/ping", async (req, res) => {
   const price = priceForTool("snapshot");
-  const decision = await enforcePolicy("snapshot", price.amountTinybar, paymentHeader(req));
+  const decision = await enforcePolicy("snapshot", price.amountTinybar, paymentHeaderFrom(req));
   if (!decision.ok) {
     res.status(402).json({
       error: "payment rejected — ENS policy exceeded",
@@ -85,7 +80,7 @@ app.get("/data/ping", async (req, res) => {
 
 app.get("/data/snapshot", async (req, res) => {
   const price = priceForTool("snapshot");
-  const decision = await enforcePolicy("snapshot", price.amountTinybar, paymentHeader(req));
+  const decision = await enforcePolicy("snapshot", price.amountTinybar, paymentHeaderFrom(req));
   if (!decision.ok) {
     res.status(402).json({
       error: "payment rejected — ENS policy exceeded",
@@ -109,7 +104,7 @@ app.get("/data/snapshot", async (req, res) => {
 
 app.get("/data/history", async (req, res) => {
   const price = priceForTool("history");
-  const decision = await enforcePolicy("history", price.amountTinybar, paymentHeader(req));
+  const decision = await enforcePolicy("history", price.amountTinybar, paymentHeaderFrom(req));
   if (!decision.ok) {
     res.status(402).json({
       error: "payment rejected — ENS policy exceeded",
@@ -135,7 +130,7 @@ app.get("/data/history", async (req, res) => {
 
 app.get("/data/deep-dive", async (req, res) => {
   const price = priceForTool("deep-dive");
-  const decision = await enforcePolicy("deep-dive", price.amountTinybar, paymentHeader(req));
+  const decision = await enforcePolicy("deep-dive", price.amountTinybar, paymentHeaderFrom(req));
   if (!decision.ok) {
     res.status(402).json({
       error: "payment rejected — ENS policy exceeded",
