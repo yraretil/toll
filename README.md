@@ -23,7 +23,8 @@ User task ──▶ Planner (LLM, Groq) ──▶ Toll resource server ──▶
 ```
 
 - **Planner** (`agent-client/src/planner.ts`) outputs strict JSON
-  `{action, reason}` — `snapshot` | `history` | `deep-dive` | `recommend`.
+  `{action, reason, symbol?}` — `snapshot` | `history` | `deep-dive` | `price`
+  | `risk-scan` | `whale-watch` | `recommend` (symbols USDC/DAI/USDT where applicable).
   It never signs and never touches money; a deterministic x402 client executes buys.
   Guardrails: max 4 purchases, budget = `spend.dailyCap` from the agent's ENS records.
 - **Resource server** (`resource-server/src/index.ts`) quotes a fixed per-dataset price,
@@ -53,7 +54,7 @@ The agent's name holds its spending policy as text records, read live at payment
 |---|---|
 | `spend.dailyCap` | `"2000000"` tinybar/day |
 | `spend.maxPerRequest` | `"2000000"` tinybar |
-| `spend.allowedTools` | `"snapshot,history,deep-dive"` |
+| `spend.allowedTools` | `"snapshot,history,deep-dive,price,risk-scan,whale-watch"` |
 | `toll.riskTier` | `"research"` |
 
 Over cap/limit, off-allowlist, or identity mismatch → HTTP 402
