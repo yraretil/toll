@@ -37,8 +37,8 @@ const ONE_YEAR = 365n * 24n * 60n * 60n;
 
 const POLICY_RECORDS: [string, string][] = [
   ["spend.dailyCap", "2000000"],
-  ["spend.maxPerRequest", "200000"],
-  ["spend.allowedTools", "snapshot,history,deep-dive"],
+  ["spend.maxPerRequest", "2000000"],
+  ["spend.allowedTools", "snapshot,history,deep-dive,price,risk-scan,whale-watch"],
   ["toll.riskTier", "research"],
 ];
 
