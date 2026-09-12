@@ -109,6 +109,12 @@ function systemPrompt(
   ].join("\n");
 }
 
+export type PlannerEvent =
+  | { type: "decision"; decision: PlannerDecision }
+  | { type: "purchase"; purchase: Purchase; spentTinybar: number }
+  | { type: "stopped"; reason: string }
+  | { type: "answer"; answer: string };
+
 export async function runPlannerLoop(opts: {
   task: string;
   budgetTinybar: number;
@@ -116,6 +122,7 @@ export async function runPlannerLoop(opts: {
   llmCall: LlmCall;
   purchase: PurchaseFn;
   maxPurchases?: number;
+  onEvent?: (event: PlannerEvent) => void;
 }): Promise<PlannerResult> {
   const maxPurchases = opts.maxPurchases ?? MAX_PURCHASES;
   const messages: ChatMessage[] = [
@@ -134,12 +141,9 @@ export async function runPlannerLoop(opts: {
     } catch (err) {
       parseFailures += 1;
       if (parseFailures > MAX_PARSE_RETRIES) {
-        return {
-          answer: "",
-          totalSpentTinybar: spent,
-          purchases,
-          stopped: `stopped: LLM output malformed ${parseFailures} times (${String(err)})`,
-        };
+        const reason = `stopped: LLM output malformed ${parseFailures} times (${String(err)})`;
+        opts.onEvent?.({ type: "stopped", reason });
+        return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
       }
       messages.push({ role: "assistant", content: raw });
       messages.push({
@@ -150,36 +154,29 @@ export async function runPlannerLoop(opts: {
     }
     parseFailures = 0;
     messages.push({ role: "assistant", content: raw });
+    opts.onEvent?.({ type: "decision", decision });
 
     if (decision.action === "recommend") {
+      opts.onEvent?.({ type: "answer", answer: decision.reason });
       return { answer: decision.reason, totalSpentTinybar: spent, purchases, stopped: null };
     }
     if (purchases.length >= maxPurchases) {
-      return {
-        answer: "",
-        totalSpentTinybar: spent,
-        purchases,
-        stopped: `stopped: purchase cap (${maxPurchases}) reached`,
-      };
+      const reason = `stopped: purchase cap (${maxPurchases}) reached`;
+      opts.onEvent?.({ type: "stopped", reason });
+      return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
     }
     const spec = opts.tools[decision.action];
     if (!spec) {
-      return {
-        answer: "",
-        totalSpentTinybar: spent,
-        purchases,
-        stopped: `stopped: tool not offered: ${decision.action}`,
-      };
+      const reason = `stopped: tool not offered: ${decision.action}`;
+      opts.onEvent?.({ type: "stopped", reason });
+      return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
     }
     if (spent + spec.priceTinybar > opts.budgetTinybar) {
-      return {
-        answer: "",
-        totalSpentTinybar: spent,
-        purchases,
-        stopped:
-          `stopped: budget exceeded (spent ${spent}, ` +
-          `${decision.action} costs ${spec.priceTinybar}, budget ${opts.budgetTinybar})`,
-      };
+      const reason =
+        `stopped: budget exceeded (spent ${spent}, ` +
+        `${decision.action} costs ${spec.priceTinybar}, budget ${opts.budgetTinybar})`;
+      opts.onEvent?.({ type: "stopped", reason });
+      return { answer: "", totalSpentTinybar: spent, purchases, stopped: reason };
     }
     const { body } = await opts.purchase(decision.action, pathFor(spec, decision.symbol));
     spent += spec.priceTinybar;
@@ -189,6 +186,11 @@ export async function runPlannerLoop(opts: {
       symbol: decision.symbol ?? spec.defaultSymbol,
       amountTinybar: spec.priceTinybar,
       body,
+    });
+    opts.onEvent?.({
+      type: "purchase",
+      purchase: purchases[purchases.length - 1],
+      spentTinybar: spent,
     });
     messages.push({
       role: "user",

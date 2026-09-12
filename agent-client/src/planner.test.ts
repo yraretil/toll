@@ -176,4 +176,23 @@ describe("runPlannerLoop", () => {
     expect(result.totalSpentTinybar).toBe(400_000);
     expect(result.answer).toContain("DAI wins");
   });
+
+  it("emits decision/purchase/answer events in order", async () => {
+    const purchase = mockPurchase();
+    const events: string[] = [];
+    await runPlannerLoop({
+      task: "task",
+      budgetTinybar: 2_000_000,
+      tools: TOOLS,
+      llmCall: llmReturning([
+        '{"action":"snapshot","reason":"look"}',
+        '{"action":"recommend","reason":"done"}',
+      ]),
+      purchase,
+      onEvent: (e) => {
+        events.push(e.type === "decision" ? `decision:${e.decision.action}` : e.type);
+      },
+    });
+    expect(events).toEqual(["decision:snapshot", "purchase", "decision:recommend", "answer"]);
+  });
 });

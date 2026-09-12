@@ -1,21 +1,16 @@
-// Toll agent: LLM planner over metered x402 data (T4.2).
+// Toll agent: LLM planner over metered x402 data.
 // With LLM_API_KEY set → planner loop (Groq/OpenAI-compatible).
 // Without → deterministic fallback (buys every dataset once).
 import "dotenv/config";
-import { wrapFetchWithPaymentFromConfig, decodePaymentResponseHeader } from "@x402/fetch";
-import { createClientHederaSigner } from "@x402/hedera";
-import { ExactHederaScheme } from "@x402/hedera/exact/client";
-import { PrivateKey } from "@x402/hedera";
-import { createPublicClient, http } from "viem";
-import { sepolia } from "viem/chains";
 import {
   makeLlmCall,
+  pathFor,
   runPlannerLoop,
-  type PurchaseFn,
   type ToolSpec,
 } from "./planner.js";
+import { createBuyer, type Settlement } from "./buyer.js";
+import { hashscanUrl, loadIdentity, tinybarToHbar } from "./identity.js";
 
-const UNIVERSAL_RESOLVER = "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe" as const;
 const TASK = "Find the best USDC lending opportunity on Aave V3.";
 
 const TOOLS: Record<string, ToolSpec> = {
@@ -29,33 +24,8 @@ function log(...args: unknown[]): void {
   console.log(...args);
 }
 
-/** Planner budget = spend.dailyCap from the agent's ENS records (fallback: 2M). */
-async function readBudgetTinybar(): Promise<number> {
-  const name = process.env.ENS_AGENT_NAME ?? "";
-  if (!name) {
-    log("ENS_AGENT_NAME unset — budget defaults to 2000000 tinybar");
-    return 2_000_000;
-  }
-  try {
-    const client = createPublicClient({
-      chain: sepolia,
-      transport: http(
-        process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com",
-      ),
-    });
-    const cap = await client.getEnsText({
-      name,
-      key: "spend.dailyCap",
-      universalResolverAddress: UNIVERSAL_RESOLVER,
-    });
-    if (cap && Number(cap) > 0) {
-      log(`budget from ${name}: spend.dailyCap=${cap} tinybar`);
-      return Number(cap);
-    }
-  } catch (err) {
-    log(`ENS budget read failed (${String(err)}) — defaulting to 2000000 tinybar`);
-  }
-  return 2_000_000;
+function shortAddr(addr: string): string {
+  return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
 }
 
 async function main(): Promise<void> {
@@ -66,70 +36,65 @@ async function main(): Promise<void> {
     throw new Error("HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY must be set in .env");
   }
 
-  const signer = createClientHederaSigner(
+  const identity = await loadIdentity();
+  log(`● Toll agent ${identity.name || "(no ENS name)"} · payer ${identity.payerAccount} · balance ${tinybarToHbar(identity.balanceTinybar)} HBAR`);
+
+  const purchase = createBuyer({
+    serverUrl,
     accountId,
-    PrivateKey.fromStringECDSA(privateKey),
-    { network: "hedera:testnet" },
-  );
-  // HBAR (0.0.0) is NOT in @x402/hedera's default-asset table (USDC only),
-  // so opt it in explicitly via spendControls.
-  const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
-    schemes: [
-      {
-        network: "hedera:*",
-        client: new ExactHederaScheme(signer),
-      },
-    ],
-    spendControls: {
-      allowedAssets: [{ network: "hedera:testnet", asset: "0.0.0" }],
+    privateKey,
+    onSettlement: (tool, _path, settlement: Settlement | null) => {
+      if (settlement) {
+        log(`  ↳ settled ${settlement.transaction} → ${hashscanUrl(settlement.transaction)}`);
+      } else {
+        log(`  ↳ no settlement (rejected before payment)`);
+      }
+      void tool;
     },
   });
-
-  // Deterministic x402 executor — the only thing that ever moves money.
-  const purchase: PurchaseFn = async (tool, path) => {
-    const res = await fetchWithPayment(`${serverUrl}${path}`, { method: "GET" });
-    const body = (await res.json()) as unknown;
-    const paymentResponse = res.headers.get("PAYMENT-RESPONSE");
-    const settlement = paymentResponse
-      ? decodePaymentResponseHeader(paymentResponse)
-      : null;
-    log(`${path} settlement tx:`, JSON.stringify(settlement));
-    return { settlement, body };
-  };
 
   const llmKey = process.env.LLM_API_KEY ?? "";
   if (!llmKey) {
     log("LLM_API_KEY unset — deterministic fallback: buying every dataset once");
     let spent = 0;
     for (const [tool, spec] of Object.entries(TOOLS)) {
-      const { body } = await purchase(tool, spec.path);
+      const path = pathFor(spec);
+      log(`▸ buying ${tool} (${spec.priceTinybar} tinybar)…`);
+      await purchase(tool, path);
       spent += spec.priceTinybar;
-      log(`${spec.path} response:`, JSON.stringify(body).slice(0, 300));
     }
-    log(`total spent: ${(spent / 100_000_000).toFixed(6)} HBAR`);
+    log(`total spent: ${tinybarToHbar(spent)} HBAR`);
     return;
   }
 
   const llmCall = makeLlmCall(
     process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1",
     llmKey,
-    process.env.LLM_MODEL ?? "llama-3.3-70b-versatile",
+    process.env.LLM_MODEL ?? "openai/gpt-oss-120b",
   );
-  const budget = await readBudgetTinybar();
+  log(`task: ${TASK}`);
+  log(`budget: ${identity.dailyCapTinybar} tinybar (spend.dailyCap on ${identity.name})`);
   const result = await runPlannerLoop({
     task: TASK,
-    budgetTinybar: budget,
+    budgetTinybar: identity.dailyCapTinybar,
     tools: TOOLS,
     llmCall,
     purchase,
+    onEvent: (e) => {
+      if (e.type === "decision" && e.decision.action !== "recommend") {
+        const sym = e.decision.symbol ? ` ${e.decision.symbol}` : "";
+        log(`▸ planner wants ${e.decision.action}${sym} — ${e.decision.reason}`);
+      } else if (e.type === "purchase") {
+        log(`  ✓ bought ${e.purchase.tool} for ${e.purchase.amountTinybar} tinybar (spent ${e.spentTinybar})`);
+      } else if (e.type === "stopped") {
+        log(`  ✕ ${e.reason}`);
+      }
+    },
   });
   log("---");
-  for (const p of result.purchases) {
-    log(`bought ${p.tool} for ${p.amountTinybar} tinybar`);
-  }
-  if (result.stopped) log(result.stopped);
   log(`answer: ${result.answer}`);
-  log(`total spent: ${(result.totalSpentTinybar / 100_000_000).toFixed(6)} HBAR`);
+  if (result.stopped) log(result.stopped);
+  log(`total spent: ${tinybarToHbar(result.totalSpentTinybar)} HBAR`);
 }
 
 main().catch((err) => {
