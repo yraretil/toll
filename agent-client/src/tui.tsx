@@ -10,9 +10,11 @@ import { createBuyer, type Settlement } from "./buyer.js";
 import {
   hashscanUrl,
   loadIdentity,
+  loadSpend,
   tinybarToHbar,
   fmtCompact,
   type AgentIdentity,
+  type SpendStatus,
 } from "./identity.js";
 import { DEFAULT_TASK, TOOLS } from "./catalog.js";
 import { cycleHistory, pushHistory } from "./history.js";
@@ -84,6 +86,7 @@ function App(): React.JSX.Element {
   const [editing, setEditing] = useState(true);
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(0);
+  const [spend, setSpend] = useState<SpendStatus | null>(null);
   const runningRef = useRef(false);
   const draftRef = useRef<string | null>(null);
 
@@ -97,6 +100,9 @@ function App(): React.JSX.Element {
     } catch (err) {
       push(`identity load failed: ${String(err)}`);
     }
+    const serverUrl = process.env.RESOURCE_SERVER_URL ?? "http://localhost:4021";
+    const payer = process.env.HEDERA_ACCOUNT_ID ?? "";
+    if (payer) setSpend(await loadSpend(serverUrl, payer));
   }, [push]);
 
   useEffect(() => {
@@ -168,6 +174,11 @@ function App(): React.JSX.Element {
       } finally {
         runningRef.current = false;
         setPhase("done");
+        const payer = process.env.HEDERA_ACCOUNT_ID ?? "";
+        if (payer) {
+          const serverUrl = process.env.RESOURCE_SERVER_URL ?? "http://localhost:4021";
+          setSpend(await loadSpend(serverUrl, payer));
+        }
       }
     },
     [push, history],
@@ -213,7 +224,7 @@ function App(): React.JSX.Element {
       return;
     }
     if (input === "q") exit();
-    if (phase === "done" && input === "i") {
+    if (phase === "done" && (input === "i" || key.return)) {
       setResult(null);
       setLines([]);
       setEditing(true);
@@ -243,6 +254,11 @@ function App(): React.JSX.Element {
           <Text dimColor>
             policy dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
             {identity.maxPerRequestTinybar} · tools {identity.allowedTools} · {identity.riskTier}
+          </Text>
+          <Text dimColor>
+            {spend
+              ? `day spend ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar`
+              : "day spend: server offline?"}
           </Text>
         </Box>
       )}
@@ -292,6 +308,7 @@ function App(): React.JSX.Element {
         <Text dimColor>
           [q]uit{result && phase !== "running" ? " · [r]erun" : ""}{" "}
           {phase !== "running" ? "· [t]ighten/restore caps" : ""}
+          {phase === "done" ? " · [i]/[Enter] new prompt" : ""}
           {result ? ` · total ${tinybarToHbar(result.totalSpentTinybar)} HBAR` : ""}
         </Text>
       </Box>

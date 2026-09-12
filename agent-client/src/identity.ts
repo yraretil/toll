@@ -76,3 +76,33 @@ export function fmtCompact(n: number): string {
   if (abs >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return String(Math.round(n * 100) / 100);
 }
+
+export interface SpendStatus {
+  dailyCapTinybar: number;
+  spentTinybar: number;
+  remainingTinybar: number;
+}
+
+/** Today's server-side spend for the payer (null when the server is down). */
+export async function loadSpend(serverUrl: string, payer: string): Promise<SpendStatus | null> {
+  try {
+    const res = await fetch(
+      `${serverUrl.replace(/\/+$/, "")}/status?payer=${encodeURIComponent(payer)}`,
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as Partial<SpendStatus>;
+    if (typeof body.spentTinybar !== "number" || typeof body.dailyCapTinybar !== "number") {
+      return null;
+    }
+    return {
+      dailyCapTinybar: body.dailyCapTinybar,
+      spentTinybar: body.spentTinybar,
+      remainingTinybar:
+        typeof body.remainingTinybar === "number"
+          ? body.remainingTinybar
+          : Math.max(0, body.dailyCapTinybar - body.spentTinybar),
+    };
+  } catch {
+    return null;
+  }
+}
