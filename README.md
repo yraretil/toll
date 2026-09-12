@@ -31,6 +31,8 @@ User task ──▶ Planner (LLM, Groq) ──▶ Toll resource server ──▶
               answer + total spent
 ```
 
+![One paid query, end to end](images/explainer1.png)
+
 - **Planner** (`agent-client/src/planner.ts`) outputs strict JSON
   `{action, reason, symbol?}` — `snapshot` | `history` | `deep-dive` | `price`
   | `risk-scan` | `whale-watch` | `recommend` (symbols USDC/DAI/USDT where applicable).
@@ -107,6 +109,8 @@ Full check: `bash scripts/e2e.sh` from the repo root.
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | agent | OpenAI-compatible planner endpoint |
 | `ENS_AGENT_NAME` | both | agent name, e.g. `toll-agent-chad.eth` |
 | `SEPOLIA_PRIVATE_KEY` / `SEPOLIA_RPC_URL` | agent | ENS registration wallet |
+
+![Accounts, keys, and .env routing](images/explainer2.png)
 
 ## Track fit
 
