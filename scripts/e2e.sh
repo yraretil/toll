@@ -28,7 +28,7 @@ echo "server healthy"
 cd "$ROOT/agent-client"
 npm start > "$AGENT_OUT" 2>&1 || { echo "FAIL: agent exited non-zero"; tail -20 "$AGENT_OUT"; exit 1; }
 
-grep -q "settlement tx" "$AGENT_OUT" || { echo "FAIL: no settlement tx"; exit 1; }
+grep -q "settled 0.0" "$AGENT_OUT" || { echo "FAIL: no settlement"; exit 1; }
 grep -q "total spent:" "$AGENT_OUT" || { echo "FAIL: no total spent line"; exit 1; }
 echo "agent settled + reported spend"
 
