@@ -296,7 +296,7 @@ function App(): React.JSX.Element {
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-      <Box flexDirection="column" alignItems="center">
+      <Box flexDirection="column" width={BANNER_WIDTH} alignSelf="center">
         {BANNER.map((line, i) => (
           <Text key={i} bold color="cyan">
             {line}
