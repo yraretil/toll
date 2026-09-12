@@ -37,9 +37,10 @@ const app = express();
 // Raw-terminal proof log: every /data hit, before the paywall sees it.
 app.use("/data", (req, _res, next) => {
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  const paid = req.header("PAYMENT-SIGNATURE") || req.header("X-PAYMENT");
   // eslint-disable-next-line no-console
   console.log(
-    `→ ${req.method} ${req.baseUrl}${req.path}${query} ${req.header("PAYMENT-SIGNATURE") || req.header("X-PAYMENT") ? "(paid retry)" : "(quote)"}`,
+    `${paid ? "" : "\n"}→ ${req.method} ${req.baseUrl}${req.path}${query} ${paid ? "(paid retry)" : "(quote)"}`,
   );
   next();
 });

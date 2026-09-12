@@ -50,6 +50,10 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+function pct(v: number | null, digits = 2): string {
+  return v === null ? "?" : `${v.toFixed(digits)}%`;
+}
+
 /** One-line "what we learned" digest per purchase (safe against shape drift). */
 function digest(tool: string, body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
@@ -68,9 +72,8 @@ function digest(tool: string, body: unknown): string | null {
     const util = num(m.utilizationPct);
     const liq = num(m.totalLiquidity);
     return (
-      `learned — ${String(m.symbol)} supply ${apy === null ? "?" : `${apy.toFixed(2)}%}`}` +
-      ` · borrow ${borrow === null ? "?" : `${borrow.toFixed(2)}%}`} · util ` +
-      `${util === null ? "?" : `${util.toFixed(1)}%}`} · liq ${liq === null ? "?" : fmtCompact(liq)}`
+      `learned — ${String(m.symbol)} supply ${pct(apy)}` +
+      ` · borrow ${pct(borrow)} · util ${pct(util, 1)} · liq ${liq === null ? "?" : fmtCompact(liq)}`
     );
   }
   if (tool === "price" && typeof b.price === "object" && b.price !== null) {
@@ -295,7 +298,7 @@ function App(): React.JSX.Element {
   });
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} height="100%">
       <Box flexDirection="column" width={BANNER_WIDTH} alignSelf="center">
         {BANNER.map((line, i) => (
           <Text key={i} bold color="cyan">
@@ -307,6 +310,7 @@ function App(): React.JSX.Element {
         agent : {identity ? identity.name : "…"} {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
       </Text>
       <Text dimColor>press h for help</Text>
+      <Text dimColor>{"░".repeat(64)}</Text>
       {phase === "boot" || !identity ? (
         <Text>
           <Spinner type="dots" /> loading identity + policy from Sepolia…
@@ -335,9 +339,17 @@ function App(): React.JSX.Element {
             name {identity.name} → {identity.address || "(loading…)"}
           </Text>
           <Text dimColor>
-            {spend
-              ? `today ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar (server day ledger)`
-              : "today spend: server offline?"}
+            {spend ? (
+              <>
+                today {fmtCompact(spend.spentTinybar)}/{fmtCompact(spend.dailyCapTinybar)} · left{" "}
+                <Text color="yellow">
+                  {fmtCompact(spend.remainingTinybar)} tinybar
+                </Text>{" "}
+                (server day ledger)
+              </>
+            ) : (
+              "today spend: server offline?"
+            )}
           </Text>
           <Text bold>TOOLS</Text>
           {Object.entries(TOOLS).map(([name, spec]) => (
@@ -371,9 +383,9 @@ function App(): React.JSX.Element {
           <Text>{taskDraft}</Text>
         )}
       </Box>
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" flexGrow={1}>
         {lines.map((l, i) => (
-          <Text key={i} wrap="truncate">
+          <Text key={i} wrap="wrap">
             {l}
           </Text>
         ))}
@@ -389,13 +401,26 @@ function App(): React.JSX.Element {
           <Text wrap="wrap">{result.answer}</Text>
         </Box>
       ) : null}
-      <Box marginTop={1}>
+      <Text dimColor>{"░".repeat(64)}</Text>
+      <Box flexDirection="column">
         <Text dimColor>
-          [q]uit{result && phase !== "running" ? " · [r]erun" : ""}{" "}
-          {phase !== "running" ? "· [t]ighten/restore caps · [h]elp" : ""}
+          [q]uit{result && phase !== "running" ? " · [r]erun" : ""}
           {phase === "done" ? " · [i]/[Enter] new prompt" : ""}
-          {result ? ` · total ${tinybarToHbar(result.totalSpentTinybar)} HBAR` : ""}
+          {phase !== "running" ? " · [h]elp" : ""}
         </Text>
+        {phase !== "running" || result ? (
+          <Text dimColor>
+            {phase !== "running" ? "[t]ighten/restore caps" : ""}
+            {result ? (
+              <>
+                {" · total "}
+                <Text color="yellow">{tinybarToHbar(result.totalSpentTinybar)} HBAR</Text>
+              </>
+            ) : (
+              ""
+            )}
+          </Text>
+        ) : null}
       </Box>
       {busy ? (
         <Text>
