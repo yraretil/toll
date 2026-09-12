@@ -35,6 +35,7 @@ function App(): React.JSX.Element {
   const [result, setResult] = useState<PlannerResult | null>(null);
   const [tight, setTight] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(true);
   const runningRef = useRef(false);
 
   const push = useCallback((line: string) => {
@@ -135,10 +136,23 @@ function App(): React.JSX.Element {
   }, [busy, tight, push, refreshIdentity]);
 
   useInput((input, key) => {
+    if (key.escape) {
+      setEditing(false);
+      return;
+    }
+    // While editing, keystrokes go to the task box (Enter submits it).
+    if (editing && phase === "idle" && !result) return;
     if (input === "q") exit();
+    if (phase === "done" && input === "i") {
+      setResult(null);
+      setLines([]);
+      setEditing(true);
+      setPhase("idle");
+      return;
+    }
     if (phase !== "running" && input === "r" && result) void run(taskDraft);
     if (phase !== "running" && input === "t") void toggleCap();
-    if (key.return && phase === "idle") void run(taskDraft);
+    if (phase !== "running" && input === "i") setEditing(true);
   });
 
   return (
@@ -165,7 +179,17 @@ function App(): React.JSX.Element {
       <Box marginTop={1} flexDirection="column">
         <Text bold>task</Text>
         {phase === "idle" && !result ? (
-          <TextInput value={taskDraft} onChange={setTaskDraft} onSubmit={(v) => void run(v)} />
+          <>
+            <TextInput
+              value={taskDraft}
+              onChange={setTaskDraft}
+              onSubmit={(v) => void run(v)}
+              focus={editing}
+            />
+            <Text dimColor>
+              {editing ? "typing… (Enter: run · Esc: commands)" : "commands ([i]: edit task)"}
+            </Text>
+          </>
         ) : (
           <Text>{taskDraft}</Text>
         )}
@@ -195,6 +219,11 @@ function App(): React.JSX.Element {
           {result ? ` · total ${tinybarToHbar(result.totalSpentTinybar)} HBAR` : ""}
         </Text>
       </Box>
+      {busy ? (
+        <Text>
+          <Spinner type="dots" /> writing policy to Sepolia…
+        </Text>
+      ) : null}
     </Box>
   );
 }
