@@ -259,11 +259,7 @@ function App(): React.JSX.Element {
       return;
     }
     if (showHelp) {
-    if (input === "q") exit();
-    if (phase !== "running" && input === "h") {
-      setShowHelp(true);
-      return;
-    }
+      if (input === "q") exit();
       setShowHelp(false);
       return;
     }
@@ -285,6 +281,10 @@ function App(): React.JSX.Element {
       return;
     }
     if (input === "q") exit();
+    if (phase !== "running" && input === "h") {
+      setShowHelp(true);
+      return;
+    }
     if (phase === "done" && (input === "i" || key.return)) {
       setResult(null);
       setLines([]);
