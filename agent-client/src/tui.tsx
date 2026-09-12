@@ -59,6 +59,11 @@ function digest(tool: string, body: unknown): string | null {
       `${util === null ? "?" : `${util.toFixed(1)}%}`} · liq ${liq === null ? "?" : fmtCompact(liq)}`
     );
   }
+  if (tool === "price" && typeof b.price === "object" && b.price !== null) {
+    const p = b.price as { symbol?: unknown; priceUsd?: unknown };
+    const usd = num(p.priceUsd);
+    return `learned — ${String(p.symbol)} ≈ $${usd === null ? "?" : usd.toFixed(4)}`;
+  }
   if (tool === "history" && Array.isArray(b.history) && b.history.length > 0) {
     const last = b.history[b.history.length - 1] as MarketLike & { supplyApyPct?: unknown; utilizationPct?: unknown };
     const apy = num((last as { supplyApyPct?: unknown }).supplyApyPct);

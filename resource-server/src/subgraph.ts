@@ -6,14 +6,22 @@ const GRAPH_API_KEY = process.env.GRAPH_API_KEY ?? "";
 const SUBGRAPH_ID =
   process.env.AAVE_V3_SUBGRAPH_ID ??
   "Cd2gEDVeqnjBn1hSeqFMitw8Q1iiyV9FYUZkLNRcL87g";
+// Canonical Uniswap V3 (Ethereum mainnet) subgraph (Uniswap docs).
+const UNISWAP_V3_SUBGRAPH_ID =
+  process.env.UNISWAP_V3_SUBGRAPH_ID ??
+  "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV";
 
-function endpoint(): string {
+function endpointFor(subgraphId: string): string {
   if (!GRAPH_API_KEY) throw new Error("GRAPH_API_KEY must be set in .env");
-  return `https://gateway.thegraph.com/api/${GRAPH_API_KEY}/subgraphs/id/${SUBGRAPH_ID}`;
+  return `https://gateway.thegraph.com/api/${GRAPH_API_KEY}/subgraphs/id/${subgraphId}`;
 }
 
-async function graphQuery<T>(query: string): Promise<T> {
-  const res = await fetch(endpoint(), {
+function endpoint(): string {
+  return endpointFor(SUBGRAPH_ID);
+}
+
+async function graphQuery<T>(query: string, subgraphId: string = SUBGRAPH_ID): Promise<T> {
+  const res = await fetch(endpointFor(subgraphId), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query }),
@@ -34,6 +42,48 @@ export function rayToPct(ray: string): number {
 /** Raw token amount → human units via the reserve's decimals. */
 export function scaledAmount(raw: string, decimals: number): number {
   return Number(raw) / 10 ** decimals;
+}
+
+/** Uniswap derivedETH × bundle ethPriceUSD → token USD price. */
+export function ethPriceToUsd(derivedEth: string, ethPriceUsd: string): number {
+  return Number(derivedEth) * Number(ethPriceUsd);
+}
+
+/** Mainnet token addresses for the price tool. */
+const TOKEN_ADDRESSES: Record<string, string> = {
+  USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+};
+
+export interface TokenPrice {
+  symbol: string;
+  priceUsd: number;
+  ethPriceUsd: number;
+}
+
+/** Live USD price for a stablecoin via Uniswap V3 (price tool). */
+export async function queryTokenPriceUsd(symbol: string): Promise<TokenPrice> {
+  const address = TOKEN_ADDRESSES[symbol.toUpperCase()];
+  if (!address) throw new Error(`no price feed for symbol: ${symbol}`);
+  const data = await graphQuery<{
+    token: { symbol: string; derivedETH: string } | null;
+    bundles: { ethPriceUSD: string }[];
+  }>(
+    `{
+      token(id: "${address.toLowerCase()}") { symbol derivedETH }
+      bundles { ethPriceUSD }
+    }`,
+    UNISWAP_V3_SUBGRAPH_ID,
+  );
+  if (!data.token || data.bundles.length === 0) {
+    throw new Error(`no price data for symbol: ${symbol}`);
+  }
+  return {
+    symbol: data.token.symbol,
+    priceUsd: ethPriceToUsd(data.token.derivedETH, data.bundles[0].ethPriceUSD),
+    ethPriceUsd: Number(data.bundles[0].ethPriceUSD),
+  };
 }
 
 export interface MarketSnapshot {

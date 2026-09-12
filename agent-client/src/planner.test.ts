@@ -41,6 +41,14 @@ describe("parseDecision", () => {
     });
   });
 
+  it("accepts the price action", () => {
+    expect(parseDecision('{"action":"price","reason":"need USD value","symbol":"USDC"}')).toEqual({
+      action: "price",
+      reason: "need USD value",
+      symbol: "USDC",
+    });
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parseDecision("not json")).toThrow(/not JSON/);
   });
