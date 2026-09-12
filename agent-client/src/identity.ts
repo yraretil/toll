@@ -7,9 +7,22 @@ const SEPOLIA_RPC_URL =
   process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
 const MIRROR_NODE = "https://testnet.mirrornode.hedera.com";
 
+const ETH_REGISTRY = "0xbdc85dd5b15d7ecb354cd7cb6f2c50b4f2c4f0e2" as const;
+const registryAbi = [
+  {
+    type: "function",
+    name: "getResolver",
+    stateMutability: "view",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
 export interface AgentIdentity {
   name: string;
   address: string;
+  /** Agent's own Permissioned Resolver (verify on sepolia.etherscan.io). */
+  resolver: string;
   payerAccount: string;
   balanceTinybar: number;
   dailyCapTinybar: number;
@@ -46,9 +59,25 @@ export async function loadIdentity(): Promise<AgentIdentity> {
       balanceTinybar = 0;
     }
   }
+  // Resolver lookup is best-effort: never fail identity over it.
+  let resolver = "";
+  if (name) {
+    try {
+      const label = name.endsWith(".eth") ? name.slice(0, -4) : name;
+      resolver = (await client.readContract({
+        address: ETH_REGISTRY,
+        abi: registryAbi,
+        functionName: "getResolver",
+        args: [label],
+      })) as string;
+    } catch {
+      resolver = "";
+    }
+  }
   return {
     name,
     address: address ?? "",
+    resolver,
     payerAccount,
     balanceTinybar,
     dailyCapTinybar: Number(dailyCap ?? "2000000"),

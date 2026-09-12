@@ -16,13 +16,26 @@ import {
   type AgentIdentity,
   type SpendStatus,
 } from "./identity.js";
-import { DEFAULT_TASK, TOOLS } from "./catalog.js";
+import { DEFAULT_TASK, TOOLS, TOOL_BLURBS } from "./catalog.js";
 import { cycleHistory, pushHistory } from "./history.js";
 import { policyClients, setPolicyRecord } from "../scripts/policy.js";
 
 const TIGHT_CAP = "100000";
 const OPEN_CAP = "2000000";
 const MAX_LINES = 24;
+
+/** Display labels only — hosts and model names are public, keys never are. */
+function llmLabel(): string {
+  const base = process.env.LLM_BASE_URL ?? "";
+  const provider = base.includes("groq")
+    ? "groq"
+    : base.includes("openrouter")
+      ? "openrouter"
+      : base.includes("openai")
+        ? "openai"
+        : "custom";
+  return `${provider} · ${process.env.LLM_MODEL ?? "?"}`;
+}
 
 interface MarketLike {
   symbol?: unknown;
@@ -111,6 +124,7 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(0);
   const [spend, setSpend] = useState<SpendStatus | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const runningRef = useRef(false);
   const draftRef = useRef<string | null>(null);
 
@@ -237,7 +251,20 @@ function App(): React.JSX.Element {
 
   useInput((input, key) => {
     if (key.escape) {
+      if (showHelp) {
+        setShowHelp(false);
+        return;
+      }
       setEditing(false);
+      return;
+    }
+    if (showHelp) {
+    if (input === "q") exit();
+    if (phase !== "running" && input === "h") {
+      setShowHelp(true);
+      return;
+    }
+      setShowHelp(false);
       return;
     }
     // While editing, keystrokes go to the task box (Enter submits it,
@@ -273,8 +300,10 @@ function App(): React.JSX.Element {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
       <Text bold color="cyan">
-        Toll {identity ? `· ${identity.name}` : ""} {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
+        Toll · agent: {identity ? identity.name : "…"} (press h for help){" "}
+        {tight ? <Text color="red">[CAPS TIGHT]</Text> : ""}
       </Text>
+      <Text dimColor>chain hedera:testnet · facilitator blocky402 testnet · llm {llmLabel()}</Text>
       {phase === "boot" || !identity ? (
         <Text>
           <Spinner type="dots" /> loading identity + policy from Sepolia…
@@ -282,20 +311,44 @@ function App(): React.JSX.Element {
       ) : (
         <Box flexDirection="column">
           <Text dimColor>
-            payer {identity.payerAccount} · {tinybarToHbar(identity.balanceTinybar)} HBAR ·{" "}
+            account {identity.payerAccount} · {tinybarToHbar(identity.balanceTinybar)} HBAR ·{" "}
             {shortAddr(identity.address)}
           </Text>
+          <Text bold>policy (on ENSv2 Sepolia — enforced at payment time)</Text>
           <Text dimColor>
-            policy dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
+            dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
             {identity.maxPerRequestTinybar} · tools {identity.allowedTools} · {identity.riskTier}
+          </Text>
+          <Text dimColor>
+            resolver {identity.resolver || "(loading…)"}
+            {identity.resolver ? " · sepolia.etherscan.io" : ""}
           </Text>
           <Text dimColor>
             {spend
               ? `today ${fmtCompact(spend.spentTinybar)}/${fmtCompact(spend.dailyCapTinybar)} · left ${fmtCompact(spend.remainingTinybar)} tinybar (server day ledger, all runs)`
               : "today spend: server offline?"}
           </Text>
+          <Text bold>tools (priced per query in tinybar)</Text>
+          {Object.entries(TOOLS).map(([name, spec]) => (
+            <Text key={name} dimColor>
+              {"  "}{name} {fmtCompact(spec.priceTinybar)} — {TOOL_BLURBS[name] ?? ""}
+            </Text>
+          ))}
         </Box>
       )}
+      {showHelp ? (
+        <Box marginTop={1} flexDirection="column" borderStyle="single" paddingX={1}>
+          <Text bold>help</Text>
+          <Text dimColor>Enter run · ↑/↓ prompt history · Esc commands · i edit task</Text>
+          <Text dimColor>r rerun · t tighten/restore caps · h help · q quit</Text>
+          <Text dimColor>left terminal (server log) = proof: quotes, paid retries, ✓/✕ verdicts</Text>
+          <Text dimColor>this screen = story: identity, policy, purchases, HashScan receipts</Text>
+          <Text dimColor>
+            everything shown is public (ENS records, account IDs, balances, tx hashes)
+          </Text>
+          <Text dimColor>private keys + API keys are never displayed — press any key to close</Text>
+        </Box>
+      ) : null}
       <Box marginTop={1} flexDirection="column">
         <Text bold>task</Text>
         {phase === "idle" && !result ? (
@@ -341,7 +394,7 @@ function App(): React.JSX.Element {
       <Box marginTop={1}>
         <Text dimColor>
           [q]uit{result && phase !== "running" ? " · [r]erun" : ""}{" "}
-          {phase !== "running" ? "· [t]ighten/restore caps" : ""}
+          {phase !== "running" ? "· [t]ighten/restore caps · [h]elp" : ""}
           {phase === "done" ? " · [i]/[Enter] new prompt" : ""}
           {result ? ` · total ${tinybarToHbar(result.totalSpentTinybar)} HBAR` : ""}
         </Text>
