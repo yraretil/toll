@@ -322,10 +322,6 @@ function App(): React.JSX.Element {
           <Text dimColor>
             hbar : {tinybarToHbar(identity.balanceTinybar)} HBAR
           </Text>
-          <Text dimColor>
-            policy : dailyCap {identity.dailyCapTinybar} · maxPerRequest{" "}
-            {identity.maxPerRequestTinybar}
-          </Text>
           <Text bold>POLICY</Text>
           <Text dimColor>spend.dailyCap {identity.dailyCapTinybar}</Text>
           <Text dimColor>spend.maxPerRequest {identity.maxPerRequestTinybar}</Text>
